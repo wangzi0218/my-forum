@@ -1,7 +1,9 @@
 import { useState, useCallback } from "react";
 import { useAppStore } from "@/store/appStore";
-import { Plus, Settings, ChevronRight, FolderOpen } from "lucide-react";
+import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload } from "lucide-react";
 import { generateId } from "@/lib/utils";
+import { db } from "@/store/database";
+import { useChatStore } from "@/store/chatStore";
 import type { Workspace, Chat, UUID } from "@/types";
 
 export function Sidebar() {
@@ -13,6 +15,45 @@ export function Sidebar() {
   const setCurrentWorkspace = useAppStore((s) => s.setCurrentWorkspace);
   const addWorkspace = useAppStore((s) => s.addWorkspace);
   const addChat = useAppStore((s) => s.addChat);
+  const currentWorkspaceId = useAppStore((s) => s.currentWorkspaceId);
+
+  const handleExport = useCallback(async () => {
+    if (!currentWorkspaceId) return;
+    try {
+      const json = await db.exportWorkspace(currentWorkspaceId);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pm-council-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Export failed:", e);
+    }
+  }, [currentWorkspaceId]);
+
+  const handleImport = useCallback(async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const wsId = await db.importWorkspace(text);
+        // 重新加载工作区列表
+        const workspaces = await db.listWorkspaces();
+        const chats = await db.listChats(wsId);
+        useAppStore.setState({ workspaces, chats, currentWorkspaceId: wsId, currentChatId: null });
+        useChatStore.getState().clearMessages();
+      } catch (e) {
+        console.error("Import failed:", e);
+      }
+    };
+    input.click();
+  }, []);
 
   const handleNewChat = useCallback(async () => {
     // Find or create a default workspace
@@ -85,21 +126,39 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Actions */}
-      <div className="p-3 border-t border-border dark:border-dark-border flex gap-2">
+      <div className="p-3 border-t border-border dark:border-dark-border space-y-2">
         <button
           onClick={handleNewChat}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
         >
           <Plus size={16} />
           新建讨论
         </button>
-        <button
-          onClick={openSettings}
-          className="p-2 text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
-          aria-label="设置"
-        >
-          <Settings size={16} />
-        </button>
+        <div className="flex gap-1.5">
+          <button
+            onClick={handleExport}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
+            title="导出工作区"
+          >
+            <Download size={13} />
+            导出
+          </button>
+          <button
+            onClick={handleImport}
+            className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
+            title="导入工作区"
+          >
+            <Upload size={13} />
+            导入
+          </button>
+          <button
+            onClick={openSettings}
+            className="flex items-center justify-center p-1.5 text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
+            aria-label="设置"
+          >
+            <Settings size={13} />
+          </button>
+        </div>
       </div>
     </aside>
   );

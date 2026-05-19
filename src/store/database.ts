@@ -462,6 +462,110 @@ class DatabaseManager {
     await this.setSetting("theme", JSON.stringify(settings.theme), "ui");
     await this.setSetting("fontSize", JSON.stringify(settings.fontSize), "ui");
   }
+
+  // =========================================================================
+  // 导出/导入
+  // =========================================================================
+
+  async exportWorkspace(workspaceId: UUID): Promise<string> {
+    const db = this.getDb();
+    const workspaces = await db.select<Array<{ id: string; name: string; description: string | null; created_at: string; updated_at: string }>>(
+      "SELECT * FROM workspace WHERE id = $1", [workspaceId],
+    );
+    if (workspaces.length === 0) throw new Error("Workspace not found");
+    const ws = workspaces[0]!;
+
+    const chats = await db.select<Array<{ id: string; title: string; status: string; created_at: string; updated_at: string }>>(
+      "SELECT * FROM chat WHERE workspace_id = $1 ORDER BY created_at ASC", [workspaceId],
+    );
+
+    const chatData = [];
+    for (const chat of chats) {
+      const messages = await this.listMessages(chat.id);
+      const choices = await this.getResolvedChoices(chat.id);
+      const pendingChoice = await this.getPendingChoice(chat.id);
+      chatData.push({
+        id: chat.id,
+        title: chat.title,
+        status: chat.status,
+        createdAt: chat.created_at,
+        updatedAt: chat.updated_at,
+        messages,
+        choices: pendingChoice ? [...choices, pendingChoice] : choices,
+      });
+    }
+
+    return JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspace: {
+        id: ws.id,
+        name: ws.name,
+        description: ws.description ?? undefined,
+        createdAt: ws.created_at,
+        updatedAt: ws.updated_at,
+      },
+      chats: chatData,
+    }, null, 2);
+  }
+
+  async importWorkspace(json: string): Promise<UUID> {
+    const data = JSON.parse(json) as {
+      version: number;
+      workspace: { id: string; name: string; description?: string; createdAt: string; updatedAt: string };
+      chats: Array<{
+        id: string;
+        title: string;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+        messages: Message[];
+        choices: Choice[];
+      }>;
+    };
+
+    if (data.version !== 1) throw new Error("Unsupported export version");
+
+    const ws = data.workspace;
+    await this.createWorkspace({
+      id: ws.id,
+      name: ws.name,
+      description: ws.description,
+    });
+
+    for (const chat of data.chats) {
+      await this.createChat({
+        id: chat.id,
+        workspaceId: ws.id,
+        title: chat.title,
+        status: chat.status as Chat["status"],
+      });
+
+      for (const msg of chat.messages) {
+        await this.createMessage(msg);
+      }
+
+      for (const choice of chat.choices) {
+        await this.createChoice(choice, choice.options.map((opt) => ({
+          option: { id: opt.id, label: opt.label, description: opt.description, createdAt: choice.createdAt },
+          preferences: opt.characterPreferences.map((pref) => ({
+            characterId: pref.characterId,
+            leaning: pref.leaning,
+            reason: pref.reason,
+          })),
+        })));
+        if (choice.status !== "pending") {
+          await this.updateChoice(choice.id, {
+            selectedOptionId: choice.selectedOptionId,
+            status: choice.status,
+            resolvedAt: choice.resolvedAt,
+          });
+        }
+      }
+    }
+
+    return ws.id;
+  }
 }
 
 export const db = new DatabaseManager();
