@@ -34,6 +34,17 @@ const CHARACTER_NAMES: Record<string, string> = {
   "a-zhe": "阿哲",
 };
 
+/** NPC 发言前延迟（ms）— 模拟思考节奏 */
+const SPEAKING_DELAY: Record<string, number> = {
+  "xiao-lin": 500,   // 小林反应快，脱口而出
+  "lao-chen": 1000,  // 老陈沉稳，想一下再说
+  "a-zhe": 1500,     // 阿哲深思熟虑，最后收敛
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ---------------------------------------------------------------------------
 // DiscussionManager
 // ---------------------------------------------------------------------------
@@ -115,6 +126,7 @@ export class DiscussionManager {
     _characters: Character[],
     onChunk: (characterId: string, chunk: string) => void,
     onMessageStart: (message: Message) => void,
+    onTypingStart?: (characterId: string) => void,
   ): Promise<DiscussionResult> {
     const newMessages: Message[] = [];
 
@@ -129,6 +141,14 @@ export class DiscussionManager {
       const allMessages = [...recentMessages, ...newMessages];
       const systemPrompt = buildSystemPrompt(character, allMessages, []);
       const chatMessages = this.buildChatMessages(systemPrompt, allMessages, images);
+
+      // 发言前延迟：模拟思考节奏
+      // 小林快（反应快），老陈中（稳重），阿哲慢（深思熟虑）
+      if (onTypingStart) {
+        onTypingStart(character.id);
+      }
+      const delayMs = SPEAKING_DELAY[character.id] ?? 800;
+      await sleep(delayMs);
 
       // 创建空消息，通知 UI
       const messageId = generateId();

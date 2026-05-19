@@ -89,6 +89,10 @@ export function ChatView() {
             }
             startStreamingMessage(msg);
           },
+          // onTypingStart: 发言前显示 typing indicator
+          (characterId) => {
+            setTyping(characterId);
+          },
         );
 
         // 流式完成，持久化每条消息
