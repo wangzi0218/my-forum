@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicholasq/tauri-v2-schema/main/tauri-conf.schema.json",
+  "productName": "PM Workflow Harness",
+  "version": "0.1.0",
+  "identifier": "com.pm-workflow-harness.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "PM Workflow Harness",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

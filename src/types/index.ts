@@ -1,0 +1,220 @@
+// ============================================================
+// 基础类型
+// ============================================================
+
+/** UUID v4 */
+export type UUID = string;
+
+/** ISO 8601 时间戳 */
+export type ISODateString = string;
+
+// ============================================================
+// Workspace（工作区）
+// ============================================================
+
+export interface Workspace {
+  id: UUID;
+  name: string;
+  description?: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+// ============================================================
+// Chat（讨论）
+// ============================================================
+
+export type ChatStatus = "active" | "converged" | "archived";
+
+export interface Chat {
+  id: UUID;
+  workspaceId: UUID;
+  title: string;
+  status: ChatStatus;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+// ============================================================
+// Message（消息）
+// ============================================================
+
+export type MessageRole = "user" | "character" | "system";
+
+export interface Message {
+  id: UUID;
+  chatId: UUID;
+  role: MessageRole;
+  characterId?: UUID;
+  content: string;
+  images: ImageAttachment[];
+  metadata?: MessageMetadata;
+  createdAt: ISODateString;
+}
+
+export interface MessageMetadata {
+  turnNumber?: number;
+  hasDivergence?: boolean;
+  model?: string;
+  latencyMs?: number;
+  quote?: MessageQuote;
+}
+
+// ============================================================
+// ImageAttachment（图片附件）
+// ============================================================
+
+export interface ImageAttachment {
+  id: UUID;
+  filename: string;
+  mimeType: string;
+  localPath: string;
+  data: string; // base64
+  width?: number;
+  height?: number;
+}
+
+// ============================================================
+// Choice（选择点）
+// ============================================================
+
+export type ChoiceStatus = "pending" | "resolved" | "skipped";
+
+export interface Choice {
+  id: UUID;
+  chatId: UUID;
+  triggerMessageId?: UUID;
+  question: string;
+  options: ChoiceOption[];
+  selectedOptionId?: UUID;
+  status: ChoiceStatus;
+  createdAt: ISODateString;
+  resolvedAt?: ISODateString;
+}
+
+export interface ChoiceOption {
+  id: UUID;
+  label: string; // "A", "B", "C"
+  description: string;
+  characterPreferences: CharacterPreference[];
+}
+
+export type PreferenceLeaning = "strong" | "prefer" | "neutral" | "against";
+
+export interface CharacterPreference {
+  characterId: UUID;
+  leaning: PreferenceLeaning;
+  reason?: string;
+}
+
+// ============================================================
+// MessageQuote（消息引用）
+// ============================================================
+
+export interface MessageQuote {
+  messageId: UUID;
+  characterId: UUID;
+  characterName: string;
+  characterColor: string;
+  content: string;
+}
+
+// ============================================================
+// Character（NPC 角色）
+// ============================================================
+
+export interface Character {
+  id: UUID;
+  name: string;
+  color: string;
+  avatar: string;
+  personality: string;
+  speakingStyle: string;
+  capabilities: string[];
+  triggerConditions: string[];
+  systemPrompt: string;
+  isBuiltin: boolean;
+  createdAt: ISODateString;
+}
+
+// ============================================================
+// AppSettings（用户设置）
+// ============================================================
+
+export type LLMProviderType = "openai" | "claude";
+
+export interface LLMSettings {
+  provider: LLMProviderType;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface AppSettings {
+  llm: LLMSettings;
+  theme: "light" | "dark" | "system";
+  fontSize: "small" | "medium" | "large";
+}
+
+// ============================================================
+// LLM 相关
+// ============================================================
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  model: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string | ContentPart[];
+}
+
+export type ContentPart = TextContent | ImageContent;
+
+export interface TextContent {
+  type: "text";
+  text: string;
+}
+
+export interface ImageContent {
+  type: "image";
+  data: string; // base64
+  mediaType: string;
+}
+
+export interface ChatResponse {
+  content: string;
+  usage: TokenUsage;
+}
+
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+export interface ConnectionTestResult {
+  success: boolean;
+  error?: string;
+  latencyMs?: number;
+}
+
+// ============================================================
+// 讨论引擎相关
+// ============================================================
+
+export interface DiscussionResult {
+  messages: Message[];
+  choice?: Choice;
+  converged: boolean;
+}
+
+export interface DiscussionContext {
+  messages: Message[];
+  activeChoice?: Choice;
+  characters: Character[];
+  turnCount: number;
+}

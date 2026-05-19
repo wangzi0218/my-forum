@@ -1,0 +1,111 @@
+import { create } from "zustand";
+import type { AppSettings, UUID, Workspace, Chat } from "@/types";
+import { db } from "./database";
+import { useChatStore } from "./chatStore";
+import { generateId } from "@/lib/utils";
+
+interface AppState {
+  currentWorkspaceId: UUID | null;
+  currentChatId: UUID | null;
+  isSettingsOpen: boolean;
+  settings: AppSettings;
+  workspaces: Workspace[];
+  chats: Chat[];
+  isReady: boolean;
+
+  initApp: () => Promise<void>;
+  setCurrentWorkspace: (id: UUID | null) => void;
+  setCurrentChat: (id: UUID | null) => Promise<void>;
+  openSettings: () => void;
+  closeSettings: () => void;
+  updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
+  addWorkspace: (workspace: Workspace) => Promise<void>;
+  addChat: (chat: Chat) => Promise<void>;
+}
+
+const defaultSettings: AppSettings = {
+  llm: {
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    apiKey: "",
+    model: "gpt-4o",
+  },
+  theme: "system",
+  fontSize: "medium",
+};
+
+export const useAppStore = create<AppState>((set, get) => ({
+  currentWorkspaceId: null,
+  currentChatId: null,
+  isSettingsOpen: false,
+  settings: defaultSettings,
+  workspaces: [],
+  chats: [],
+  isReady: false,
+
+  initApp: async () => {
+    await db.init();
+    const [workspaces, settings] = await Promise.all([
+      db.listWorkspaces(),
+      db.loadAppSettings(),
+    ]);
+
+    // 如果没有工作区，创建默认工作区
+    if (workspaces.length === 0) {
+      const defaultWs: Workspace = {
+        id: generateId(),
+        name: "默认工作区",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await db.createWorkspace(defaultWs);
+      set({ workspaces: [defaultWs], settings, isReady: true });
+      return;
+    }
+
+    // 加载第一个工作区的讨论列表
+    const firstWs = workspaces[0]!;
+    const chats = await db.listChats(firstWs.id);
+    set({
+      workspaces,
+      chats,
+      currentWorkspaceId: firstWs.id,
+      settings,
+      isReady: true,
+    });
+  },
+
+  setCurrentWorkspace: (id) => set({ currentWorkspaceId: id }),
+
+  setCurrentChat: async (id) => {
+    set({ currentChatId: id });
+    if (id) {
+      // 加载消息到 chatStore
+      await useChatStore.getState().loadMessages(id);
+      // 加载待处理的 choice
+      const choice = await db.getPendingChoice(id);
+      useChatStore.getState().setCurrentChoice(choice);
+    } else {
+      useChatStore.getState().clearMessages();
+    }
+  },
+
+  openSettings: () => set({ isSettingsOpen: true }),
+  closeSettings: () => set({ isSettingsOpen: false }),
+
+  updateSettings: async (partial) => {
+    const newSettings = { ...get().settings, ...partial };
+    set({ settings: newSettings });
+    await db.saveAppSettings(newSettings);
+  },
+
+  addWorkspace: async (workspace) => {
+    await db.createWorkspace(workspace);
+    set((state) => ({ workspaces: [...state.workspaces, workspace] }));
+  },
+
+  addChat: async (chat) => {
+    await db.createChat(chat);
+    set((state) => ({ chats: [...state.chats, chat] }));
+  },
+}));

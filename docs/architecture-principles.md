@@ -2,115 +2,189 @@
 
 ## 总原则
 
-新项目采用：
-
 ```text
-harness-first architecture, human-like interaction
+群聊即界面，讨论即产品。
 ```
 
-这不是口号，而是分工：
+底层用明确的引擎保证可控。体验层像一个群聊 IM，足够轻。LLM 负责理解和表达增强，引擎负责状态、边界和关键决策。
 
-- harness 负责状态、账本、边界和可复盘。
-- 自然交互负责降低用户负担。
-- LLM 负责理解和表达增强。
-- runtime 负责关键控制，不把控制权全部交给模型。
+## 为什么用讨论引擎
 
-## 为什么底层要用 harness
-
-产品经理工作流里最难的是持续上下文，而不是单轮回答。
+产品经理工作流里最难的是持续上下文和多方讨论，而不是单轮回答。
 
 系统必须能回答：
 
 - 这是新问题，还是继续刚才那个问题？
-- 这句话是项目背景，还是当前案例补充？
-- 这条信息应该长期记住，还是只用于本次？
-- 当前应该继续追问，还是先给阶段结论？
-- 用户说“先不做”，系统应该暂缓还是继续推进？
-- 后面复盘时，能不能知道当时为什么这么判断？
+- 这句话是项目背景，还是当前讨论的补充？
+- NPC 之间有没有分歧？分歧点在哪里？
+- 用户做了一个选择，这个选择会影响后面的讨论方向吗？
+- 讨论到什么程度该收敛？
 
 这些都需要明确的运行时对象，而不能只靠 prompt。
 
-## 为什么体验层要自然
+## 为什么体验层要简单
 
-如果系统只暴露 harness，用户会看到太多状态、字段和流程。
+如果系统暴露太多状态、字段和流程，用户会失去耐心。
 
-第一版应该避免：
+第一版应该做到：
 
-- 表单过多
-- 状态过多
-- 输出像审查报告
-- 每一步都要求用户选择
-- 把产品经理日常语言翻译成系统术语
+- 界面就是一个群聊 IM
+- 不显示方法论名称
+- 不显示阶段状态
+- 不显示系统术语
+- 用户只需要看消息、做选择、偶尔打字补充
 
 用户应该可以直接说：
 
 ```text
-这个需求客户又提了，但我还是觉得有点虚，帮我看看。
+运营想在新用户进首页时加一个引导浮层。
 ```
 
-系统应该自然承接，而不是要求用户先补完整模板。
+系统直接开始讨论，不要求用户先选场景、选角色、填模板。
 
 ## 分层设计
 
-### 1. Runtime Layer
+### 1. 场景包层（Scenario）
 
 负责：
 
-- workspace
-- active case
-- turn count
-- query loop
-- event log
-- memory reference
-- terminal state
+- 定义参与讨论的角色
+- 定义角色的 system prompt
+- 定义触发选择点的条件
+- 定义话题源（后续扩展）
 
-### 2. Method Layer
+第一版只有一个场景包：PM 讨论。
 
-负责：
+后续可以扩展：工程评审、设计评审、面试准备等。
 
-- 问题定义
-- 决策挑战
-- 验证设计
-- 阶段关口
-- 停止条件
-
-### 3. Memory Layer
+### 2. 角色层（Character）
 
 负责：
 
-- 项目背景
-- 用户偏好
-- 团队规则
-- 当前案例临时事实
-- 写入确认
-- 撤回和覆盖
+- 名字、头像、颜色
+- 人设描述
+- 说话风格
+- 默认擅长的方法论
 
-### 4. LLM Layer
+第一版角色写死在代码里。后续支持用户自定义。
+
+### 3. 讨论引擎层（Engine）
+
+负责：
+
+- 管理讨论流（谁在说、说了什么）
+- 分歧检测（NPC 之间是否有不同意见）
+- 选择点生成（什么时候让用户做选择）
+- 讨论收敛（什么时候该给结论）
+- 讨论节奏（NPC 发言的先后顺序）
+
+引擎不关心具体角色是谁，只管"有 N 个角色在讨论"。
+
+### 4. LLM 层（Provider）
 
 负责：
 
 - 语义理解
-- 场景和角色抽取
-- 文案自然化
-- 草稿归一化
+- NPC 回复生成
+- 图片内容识别
+- 选择点内容生成
 
 不负责：
 
-- 静默写长期记忆
-- 绕过阶段机
-- 最终权限判断
-- 强行替用户做业务决策
+- 决定谁发言（引擎决定）
+- 决定是否触发选择点（引擎决定）
+- 最终业务决策（用户决定）
 
-### 5. Interface Layer
+支持两种 API 格式：
+- OpenAI 格式（/v1/chat/completions）
+- Claude 格式（/v1/messages）
+
+### 5. 存储层（Store）
 
 负责：
 
-- 本地网页
-- CLI
-- skill
-- MCP
+- 工作区管理
+- 聊天记录
+- NPC 配置
+- 用户设置
 
-第一版只选一个主入口，其他入口先作为后续可能性。
+主存储：SQLite。
+备份/导出：JSON。
+
+### 6. 界面层（UI）
+
+负责：
+
+- 群聊消息渲染
+- 选择点卡片
+- 图片上传和显示
+- 设置页面
+
+第一版只有一个主界面：群聊。
+
+## 场景包架构
+
+```
+scenarios/
+└── pm-discussion/
+    ├── characters.ts   # 角色定义
+    ├── prompts.ts      # system prompt
+    ├── triggers.ts     # 选择点触发条件
+    └── topics.ts       # 话题源（后续扩展）
+```
+
+场景包是独立模块，讨论引擎通过接口调用。
+
+添加新场景只需要：
+1. 在 scenarios/ 下新建目录
+2. 定义角色和 prompt
+3. 定义触发逻辑
+
+引擎、LLM 层、存储层、UI 层全部复用。
+
+## 讨论引擎设计
+
+### 讨论流
+
+```
+用户输入
+    ↓
+引擎判断：新问题 / 继续补充 / 切换话题
+    ↓
+引擎决定：哪个 NPC 先发言
+    ↓
+LLM 生成 NPC 回复
+    ↓
+引擎检查：是否有分歧 / 是否需要选择点
+    ↓
+如果有分歧 → 生成选择点卡片
+如果需要继续 → 下一个 NPC 发言
+如果该收敛 → 给出结论或下一步建议
+```
+
+### 分歧检测
+
+引擎通过以下方式检测分歧：
+- NPC 回复中包含不同方向的建议
+- NPC 明确表达不同意见
+- 讨论涉及多个可选方案
+
+### 选择点
+
+选择点是讨论流中的特殊消息，包含：
+- 问题描述
+- 选项列表
+- 各 NPC 的倾向
+- 用户的最终选择
+
+### 讨论节奏
+
+NPC 不是同时发言，而是有节奏地出现：
+1. 最相关或最想追问的 NPC 先说
+2. 补充事实的 NPC 接话
+3. 做判断的 NPC 收敛
+
+节奏由引擎控制，不是 LLM 自己决定。
 
 ## 最小数据对象
 
@@ -119,68 +193,68 @@ harness-first architecture, human-like interaction
 ```text
 id
 name
-project_profile
-preferences
-recent_cases
-active_case_id
-```
-
-### Case
-
-```text
-id
-workspace_id
-raw_input
-turns
-stage
-workflow_state
-known_context
-open_questions
-decision
-next_actions
-```
-
-### Memory
-
-```text
-id
-workspace_id
-type
-content
-source_turn_id
-status
 created_at
 updated_at
 ```
 
-### Event
+### Chat
 
 ```text
 id
 workspace_id
-case_id
-turn_id
-type
-payload
+title
+created_at
+updated_at
+```
+
+### Message
+
+```text
+id
+chat_id
+role          # user / character
+character_id  # 如果 role 是 character
+content
+images        # base64 图片列表
 created_at
 ```
 
-### Card
+### Choice
 
 ```text
-summary
-main_blocker
-next_question
-decision_hint
-memory_notice
+id
+chat_id
+question
+options       # [{label, description, character倾向}]
+selected      # 用户最终选择
+created_at
+```
+
+### Character
+
+```text
+id
+name
+color
+avatar
+personality
+system_prompt
 ```
 
 ## 关键边界
 
-- 记忆写入必须可见。
-- 项目背景可以复用，但冲突时新输入优先。
-- 用户可以说“不是这个项目”。
-- 系统可以说“先别急着做方案”。
-- LLM 失败时，核心流程仍要能给出保守结果。
-- 所有关键状态变化要能被事件记录下来。
+- NPC 会说不，不会无底线顺着用户。
+- 分歧时选择权交给用户，不替用户做决定。
+- LLM 失败时，引擎仍要能给出保守结果。
+- 讨论过程全部可回溯。
+- 图片通过 base64 传递给 LLM，原文件存本地。
+- 所有数据本地存储，不默认上云。
 
+## 技术栈
+
+- 桌面应用：Tauri2 + Rust
+- 前端：React + TypeScript + Tailwind CSS + shadcn/ui
+- 存储：SQLite + JSON
+- LLM：OpenAI 格式 / Claude 格式
+
+详细说明见 [技术栈文档](tech-stack.md)。

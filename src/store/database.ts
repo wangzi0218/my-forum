@@ -1,0 +1,411 @@
+import Database from "@tauri-apps/plugin-sql";
+import type {
+  UUID,
+  Workspace,
+  Chat,
+  Message,
+  MessageMetadata,
+
+  Choice,
+  ChoiceOption,
+  CharacterPreference,
+  Character,
+  AppSettings,
+  LLMSettings,
+} from "@/types";
+
+// ---------------------------------------------------------------------------
+// 内部类型（数据库行格式）
+// ---------------------------------------------------------------------------
+
+interface SettingRow {
+  key: string;
+  value: string;
+  group_name: string;
+}
+
+interface CharacterRow {
+  id: string;
+  name: string;
+  color: string;
+  avatar: string;
+  personality: string;
+  speaking_style: string;
+  capabilities: string;
+  trigger_conditions: string;
+  system_prompt: string;
+  is_builtin: number;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// DatabaseManager 单例
+// ---------------------------------------------------------------------------
+
+class DatabaseManager {
+  private db: Database | null = null;
+
+  async init(): Promise<void> {
+    this.db = await Database.load("sqlite:app.db");
+  }
+
+  private getDb(): Database {
+    if (!this.db) throw new Error("Database not initialized. Call init() first.");
+    return this.db;
+  }
+
+  // =========================================================================
+  // Workspace
+  // =========================================================================
+
+  async createWorkspace(ws: Omit<Workspace, "createdAt" | "updatedAt">): Promise<Workspace> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      "INSERT INTO workspace (id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
+      [ws.id, ws.name, ws.description ?? null, now, now],
+    );
+    return { ...ws, createdAt: now, updatedAt: now };
+  }
+
+  async listWorkspaces(): Promise<Workspace[]> {
+    const db = this.getDb();
+    const rows = await db.select<Array<{ id: string; name: string; description: string | null; created_at: string; updated_at: string }>>(
+      "SELECT * FROM workspace ORDER BY updated_at DESC",
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description ?? undefined,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  async deleteWorkspace(id: UUID): Promise<void> {
+    const db = this.getDb();
+    await db.execute("DELETE FROM workspace WHERE id = $1", [id]);
+  }
+
+  // =========================================================================
+  // Chat
+  // =========================================================================
+
+  async createChat(chat: Omit<Chat, "createdAt" | "updatedAt">): Promise<Chat> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      "INSERT INTO chat (id, workspace_id, title, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [chat.id, chat.workspaceId, chat.title, chat.status, now, now],
+    );
+    return { ...chat, createdAt: now, updatedAt: now };
+  }
+
+  async listChats(workspaceId: UUID): Promise<Chat[]> {
+    const db = this.getDb();
+    const rows = await db.select<Array<{ id: string; workspace_id: string; title: string; status: string; created_at: string; updated_at: string }>>(
+      "SELECT * FROM chat WHERE workspace_id = $1 ORDER BY updated_at DESC",
+      [workspaceId],
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      workspaceId: r.workspace_id,
+      title: r.title,
+      status: r.status as Chat["status"],
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  async updateChat(id: UUID, updates: Partial<Pick<Chat, "title" | "status">>): Promise<void> {
+    const db = this.getDb();
+    if (updates.title !== undefined) {
+      await db.execute("UPDATE chat SET title = $1 WHERE id = $2", [updates.title, id]);
+    }
+    if (updates.status !== undefined) {
+      await db.execute("UPDATE chat SET status = $1 WHERE id = $2", [updates.status, id]);
+    }
+  }
+
+  async deleteChat(id: UUID): Promise<void> {
+    const db = this.getDb();
+    await db.execute("DELETE FROM chat WHERE id = $1", [id]);
+  }
+
+  // =========================================================================
+  // Message
+  // =========================================================================
+
+  async createMessage(msg: Omit<Message, "createdAt">): Promise<Message> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      "INSERT INTO message (id, chat_id, role, character_id, content, metadata, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [
+        msg.id,
+        msg.chatId,
+        msg.role,
+        msg.characterId ?? null,
+        msg.content,
+        msg.metadata ? JSON.stringify(msg.metadata) : null,
+        now,
+      ],
+    );
+    // 保存图片附件
+    for (const img of msg.images) {
+      await db.execute(
+        "INSERT INTO message_image (id, message_id, filename, mime_type, data, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+        [img.id, msg.id, img.filename, img.mimeType, img.data, now],
+      );
+    }
+    return { ...msg, createdAt: now };
+  }
+
+  async listMessages(chatId: UUID): Promise<Message[]> {
+    const db = this.getDb();
+    const rows = await db.select<Array<{
+      id: string;
+      chat_id: string;
+      role: string;
+      character_id: string | null;
+      content: string;
+      metadata: string | null;
+      created_at: string;
+    }>>(
+      "SELECT * FROM message WHERE chat_id = $1 ORDER BY created_at ASC",
+      [chatId],
+    );
+
+    const messages: Message[] = [];
+    for (const r of rows) {
+      // 加载图片
+      const images = await db.select<Array<{ id: string; filename: string; mime_type: string; data: string }>>(
+        "SELECT * FROM message_image WHERE message_id = $1",
+        [r.id],
+      );
+
+      messages.push({
+        id: r.id,
+        chatId: r.chat_id,
+        role: r.role as Message["role"],
+        characterId: r.character_id ?? undefined,
+        content: r.content,
+        images: images.map((img) => ({
+          id: img.id,
+          filename: img.filename,
+          mimeType: img.mime_type,
+          localPath: "",
+          data: img.data,
+        })),
+        metadata: r.metadata ? (JSON.parse(r.metadata) as MessageMetadata) : undefined,
+        createdAt: r.created_at,
+      });
+    }
+    return messages;
+  }
+
+  async deleteMessage(id: UUID): Promise<void> {
+    const db = this.getDb();
+    await db.execute("DELETE FROM message WHERE id = $1", [id]);
+  }
+
+  // =========================================================================
+  // Choice
+  // =========================================================================
+
+  async createChoice(
+    choice: Omit<Choice, "createdAt">,
+    options: Array<{ option: Omit<ChoiceOption, "characterPreferences">; preferences: Omit<CharacterPreference, "characterId">[] & { characterId: string }[] }>,
+  ): Promise<Choice> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+
+    await db.execute(
+      "INSERT INTO choice (id, chat_id, trigger_message_id, question, selected_option_id, status, created_at, resolved_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+      [choice.id, choice.chatId, choice.triggerMessageId ?? null, choice.question, choice.selectedOptionId ?? null, choice.status, now, choice.resolvedAt ?? null],
+    );
+
+    for (const { option, preferences } of options) {
+      await db.execute(
+        "INSERT INTO choice_option (id, choice_id, label, description, created_at) VALUES ($1, $2, $3, $4, $5)",
+        [option.id, choice.id, option.label, option.description, now],
+      );
+      for (const pref of preferences) {
+        await db.execute(
+          "INSERT INTO character_preference (id, choice_option_id, character_id, leaning, reason, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+          [crypto.randomUUID(), option.id, pref.characterId, pref.leaning, pref.reason ?? null, now],
+        );
+      }
+    }
+
+    return { ...choice, createdAt: now };
+  }
+
+  async getPendingChoice(chatId: UUID): Promise<Choice | null> {
+    const db = this.getDb();
+    const rows = await db.select<Array<{
+      id: string;
+      chat_id: string;
+      trigger_message_id: string | null;
+      question: string;
+      selected_option_id: string | null;
+      status: string;
+      created_at: string;
+      resolved_at: string | null;
+    }>>(
+      "SELECT * FROM choice WHERE chat_id = $1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1",
+      [chatId],
+    );
+
+    if (rows.length === 0) return null;
+    const r = rows[0]!;
+
+    // 加载选项和偏好
+    const optionRows = await db.select<Array<{ id: string; label: string; description: string }>>(
+      "SELECT * FROM choice_option WHERE choice_id = $1",
+      [r.id],
+    );
+
+    const options: ChoiceOption[] = [];
+    for (const opt of optionRows) {
+      const prefRows = await db.select<Array<{ character_id: string; leaning: string; reason: string | null }>>(
+        "SELECT * FROM character_preference WHERE choice_option_id = $1",
+        [opt.id],
+      );
+      options.push({
+        id: opt.id,
+        label: opt.label,
+        description: opt.description,
+        characterPreferences: prefRows.map((p) => ({
+          characterId: p.character_id,
+          leaning: p.leaning as CharacterPreference["leaning"],
+          reason: p.reason ?? undefined,
+        })),
+      });
+    }
+
+    return {
+      id: r.id,
+      chatId: r.chat_id,
+      triggerMessageId: r.trigger_message_id ?? undefined,
+      question: r.question,
+      options,
+      selectedOptionId: r.selected_option_id ?? undefined,
+      status: r.status as Choice["status"],
+      createdAt: r.created_at,
+      resolvedAt: r.resolved_at ?? undefined,
+    };
+  }
+
+  async updateChoice(id: UUID, updates: Partial<Pick<Choice, "selectedOptionId" | "status" | "resolvedAt">>): Promise<void> {
+    const db = this.getDb();
+    if (updates.selectedOptionId !== undefined) {
+      await db.execute("UPDATE choice SET selected_option_id = $1 WHERE id = $2", [updates.selectedOptionId, id]);
+    }
+    if (updates.status !== undefined) {
+      await db.execute("UPDATE choice SET status = $1 WHERE id = $2", [updates.status, id]);
+    }
+    if (updates.resolvedAt !== undefined) {
+      await db.execute("UPDATE choice SET resolved_at = $1 WHERE id = $2", [updates.resolvedAt, id]);
+    }
+  }
+
+  // =========================================================================
+  // Character
+  // =========================================================================
+
+  async listCharacters(): Promise<Character[]> {
+    const db = this.getDb();
+    const rows = await db.select<CharacterRow[]>("SELECT * FROM character ORDER BY created_at ASC");
+    return rows.map(this.rowToCharacter);
+  }
+
+  async getCharacter(id: UUID): Promise<Character | null> {
+    const db = this.getDb();
+    const rows = await db.select<CharacterRow[]>("SELECT * FROM character WHERE id = $1", [id]);
+    return rows.length > 0 ? this.rowToCharacter(rows[0]!) : null;
+  }
+
+  private rowToCharacter(r: CharacterRow): Character {
+    return {
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      avatar: r.avatar,
+      personality: r.personality,
+      speakingStyle: r.speaking_style,
+      capabilities: JSON.parse(r.capabilities) as string[],
+      triggerConditions: JSON.parse(r.trigger_conditions) as string[],
+      systemPrompt: r.system_prompt,
+      isBuiltin: r.is_builtin === 1,
+      createdAt: r.created_at,
+    };
+  }
+
+  // =========================================================================
+  // Setting
+  // =========================================================================
+
+  async getSetting(key: string): Promise<string | null> {
+    const db = this.getDb();
+    const rows = await db.select<SettingRow[]>("SELECT * FROM setting WHERE key = $1", [key]);
+    if (rows.length === 0) return null;
+    return rows[0]!.value;
+  }
+
+  async setSetting(key: string, value: string, group: string): Promise<void> {
+    const db = this.getDb();
+    const id = `setting-${key}`;
+    await db.execute(
+      "INSERT INTO setting (id, key, value, group_name) VALUES ($1, $2, $3, $4) ON CONFLICT(key) DO UPDATE SET value = $3",
+      [id, key, value, group],
+    );
+  }
+
+  async getSettingsByGroup(group: string): Promise<Array<{ key: string; value: string }>> {
+    const db = this.getDb();
+    const rows = await db.select<SettingRow[]>("SELECT * FROM setting WHERE group_name = $1", [group]);
+    return rows.map((r) => ({ key: r.key, value: r.value }));
+  }
+
+  // =========================================================================
+  // 高层方法：加载设置
+  // =========================================================================
+
+  async loadAppSettings(): Promise<AppSettings> {
+    const llmRows = await this.getSettingsByGroup("llm");
+    const uiRows = await this.getSettingsByGroup("ui");
+
+    const llmMap = new Map(llmRows.map((r) => [r.key, r.value]));
+    const uiMap = new Map(uiRows.map((r) => [r.key, r.value]));
+
+    const parseJSON = (val: string | undefined, fallback: string): string => {
+      if (!val) return fallback;
+      try { return JSON.parse(val) as string; } catch { return fallback; }
+    };
+
+    const llm: LLMSettings = {
+      provider: (parseJSON(llmMap.get("llm.provider"), "openai") as LLMSettings["provider"]),
+      baseUrl: parseJSON(llmMap.get("llm.baseUrl"), "https://api.openai.com/v1"),
+      apiKey: parseJSON(llmMap.get("llm.apiKey"), ""),
+      model: parseJSON(llmMap.get("llm.model"), "gpt-4o"),
+    };
+
+    return {
+      llm,
+      theme: (parseJSON(uiMap.get("theme"), "system") as AppSettings["theme"]),
+      fontSize: (parseJSON(uiMap.get("fontSize"), "medium") as AppSettings["fontSize"]),
+    };
+  }
+
+  async saveAppSettings(settings: AppSettings): Promise<void> {
+    await this.setSetting("llm.provider", JSON.stringify(settings.llm.provider), "llm");
+    await this.setSetting("llm.baseUrl", JSON.stringify(settings.llm.baseUrl), "llm");
+    await this.setSetting("llm.apiKey", JSON.stringify(settings.llm.apiKey), "llm");
+    await this.setSetting("llm.model", JSON.stringify(settings.llm.model), "llm");
+    await this.setSetting("theme", JSON.stringify(settings.theme), "ui");
+    await this.setSetting("fontSize", JSON.stringify(settings.fontSize), "ui");
+  }
+}
+
+export const db = new DatabaseManager();
