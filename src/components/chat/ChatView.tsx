@@ -27,6 +27,8 @@ export function ChatView() {
   const llmSettings = useAppStore((s) => s.settings.llm);
   const openSettings = useAppStore((s) => s.openSettings);
   const currentChatId = useAppStore((s) => s.currentChatId);
+  const workspaces = useAppStore((s) => s.workspaces);
+  const currentWorkspaceId = useAppStore((s) => s.currentWorkspaceId);
 
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -98,6 +100,7 @@ export function ChatView() {
             startStreamingMessage(msg);
           },
           (characterId) => setTyping(characterId),
+          workspaces.find((w) => w.id === currentWorkspaceId)?.background,
         );
 
         for (const msg of result.messages) {
@@ -160,6 +163,8 @@ export function ChatView() {
           (characterId) => {
             setTyping(characterId);
           },
+          // 项目背景
+          workspaces.find((w) => w.id === currentWorkspaceId)?.background,
         );
 
         // 流式完成，持久化每条消息

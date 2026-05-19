@@ -64,6 +64,7 @@ export function Sidebar() {
       const ws: Workspace = {
         id: generateId(),
         name: "默认工作区",
+        background: "",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -178,21 +179,62 @@ function WorkspaceItem({
   onSelectChat,
 }: WorkspaceItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showBackground, setShowBackground] = useState(false);
+  const [backgroundText, setBackgroundText] = useState(workspace.background);
+  const updateWorkspace = useAppStore((s) => s.updateWorkspace);
+
+  const handleBackgroundSave = useCallback(() => {
+    if (backgroundText !== workspace.background) {
+      updateWorkspace(workspace.id, { background: backgroundText });
+    }
+    setShowBackground(false);
+  }, [backgroundText, workspace.background, workspace.id, updateWorkspace]);
 
   return (
     <div className="mb-1">
       {/* Workspace header */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center gap-2 px-2 py-2 text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
-      >
-        <ChevronRight
-          size={14}
-          className={`shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
-        />
-        <FolderOpen size={14} className="shrink-0" />
-        <span className="truncate">{workspace.name}</span>
-      </button>
+      <div className="flex items-center">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex-1 flex items-center gap-2 px-2 py-2 text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
+        >
+          <ChevronRight
+            size={14}
+            className={`shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+          />
+          <FolderOpen size={14} className="shrink-0" />
+          <span className="truncate">{workspace.name}</span>
+        </button>
+        <button
+          onClick={() => setShowBackground(!showBackground)}
+          className={`p-1 text-xs rounded transition-colors ${
+            showBackground || workspace.background
+              ? "text-primary"
+              : "text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground"
+          }`}
+          title="项目背景"
+        >
+          背景
+        </button>
+      </div>
+
+      {/* Background editor */}
+      {showBackground && (
+        <div className="mx-2 mb-1 px-2 py-1.5">
+          <textarea
+            value={backgroundText}
+            onChange={(e) => setBackgroundText(e.target.value)}
+            onBlur={handleBackgroundSave}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleBackgroundSave(); } }}
+            placeholder="描述项目背景，NPC 会在讨论时参考..."
+            rows={3}
+            className="w-full px-2 py-1.5 text-xs bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
+          <p className="text-[10px] text-foreground-secondary dark:text-dark-foreground-secondary mt-1">
+            Shift+Enter 换行，Enter 保存
+          </p>
+        </div>
+      )}
 
       {/* Chat list */}
       {isExpanded && (

@@ -62,24 +62,38 @@ class DatabaseManager {
     const db = this.getDb();
     const now = new Date().toISOString();
     await db.execute(
-      "INSERT INTO workspace (id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
-      [ws.id, ws.name, ws.description ?? null, now, now],
+      "INSERT INTO workspace (id, name, description, background, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [ws.id, ws.name, ws.description ?? null, ws.background ?? "", now, now],
     );
     return { ...ws, createdAt: now, updatedAt: now };
   }
 
   async listWorkspaces(): Promise<Workspace[]> {
     const db = this.getDb();
-    const rows = await db.select<Array<{ id: string; name: string; description: string | null; created_at: string; updated_at: string }>>(
+    const rows = await db.select<Array<{ id: string; name: string; description: string | null; background: string | null; created_at: string; updated_at: string }>>(
       "SELECT * FROM workspace ORDER BY updated_at DESC",
     );
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
       description: r.description ?? undefined,
+      background: r.background ?? "",
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
+  }
+
+  async updateWorkspace(id: UUID, updates: Partial<Pick<Workspace, "name" | "description" | "background">>): Promise<void> {
+    const db = this.getDb();
+    if (updates.name !== undefined) {
+      await db.execute("UPDATE workspace SET name = $1, updated_at = $2 WHERE id = $3", [updates.name, new Date().toISOString(), id]);
+    }
+    if (updates.description !== undefined) {
+      await db.execute("UPDATE workspace SET description = $1, updated_at = $2 WHERE id = $3", [updates.description, new Date().toISOString(), id]);
+    }
+    if (updates.background !== undefined) {
+      await db.execute("UPDATE workspace SET background = $1, updated_at = $2 WHERE id = $3", [updates.background, new Date().toISOString(), id]);
+    }
   }
 
   async deleteWorkspace(id: UUID): Promise<void> {
@@ -531,6 +545,7 @@ class DatabaseManager {
       id: ws.id,
       name: ws.name,
       description: ws.description,
+      background: (ws as Record<string, unknown>).background as string ?? "",
     });
 
     for (const chat of data.chats) {

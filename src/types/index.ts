@@ -16,6 +16,7 @@ export interface Workspace {
   id: UUID;
   name: string;
   description?: string;
+  background: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }

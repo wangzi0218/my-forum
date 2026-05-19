@@ -8,11 +8,15 @@ export function buildSystemPrompt(
   character: Character,
   recentMessages: Message[],
   _allCharacters: Character[],
+  background?: string,
 ): string {
   const messageBlock = formatMessagesForPrompt(recentMessages);
+  const backgroundBlock = background?.trim()
+    ? `\n# 项目背景\n${background.trim()}\n`
+    : "";
 
   return `${character.systemPrompt}
-
+${backgroundBlock}
 # 当前讨论
 以下是最近的讨论内容，请基于这些内容发言：
 
