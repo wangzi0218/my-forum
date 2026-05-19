@@ -439,6 +439,47 @@ class DatabaseManager {
     return rows.length > 0 ? this.rowToCharacter(rows[0]!) : null;
   }
 
+  async createCharacter(char: Omit<Character, "createdAt">): Promise<Character> {
+    const db = this.getDb();
+    const now = new Date().toISOString();
+    await db.execute(
+      `INSERT INTO character (id, name, color, avatar, personality, speaking_style, capabilities, trigger_conditions, system_prompt, is_builtin, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [
+        char.id, char.name, char.color, char.avatar,
+        char.personality, char.speakingStyle,
+        JSON.stringify(char.capabilities), JSON.stringify(char.triggerConditions),
+        char.systemPrompt, char.isBuiltin ? 1 : 0, now,
+      ],
+    );
+    return { ...char, createdAt: now };
+  }
+
+  async updateCharacter(id: UUID, updates: Partial<Pick<Character, "name" | "color" | "avatar" | "personality" | "speakingStyle" | "capabilities" | "triggerConditions" | "systemPrompt">>): Promise<void> {
+    const db = this.getDb();
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    let idx = 1;
+
+    if (updates.name !== undefined) { fields.push(`name = $${idx++}`); values.push(updates.name); }
+    if (updates.color !== undefined) { fields.push(`color = $${idx++}`); values.push(updates.color); }
+    if (updates.avatar !== undefined) { fields.push(`avatar = $${idx++}`); values.push(updates.avatar); }
+    if (updates.personality !== undefined) { fields.push(`personality = $${idx++}`); values.push(updates.personality); }
+    if (updates.speakingStyle !== undefined) { fields.push(`speaking_style = $${idx++}`); values.push(updates.speakingStyle); }
+    if (updates.capabilities !== undefined) { fields.push(`capabilities = $${idx++}`); values.push(JSON.stringify(updates.capabilities)); }
+    if (updates.triggerConditions !== undefined) { fields.push(`trigger_conditions = $${idx++}`); values.push(JSON.stringify(updates.triggerConditions)); }
+    if (updates.systemPrompt !== undefined) { fields.push(`system_prompt = $${idx++}`); values.push(updates.systemPrompt); }
+
+    if (fields.length === 0) return;
+    values.push(id);
+    await db.execute(`UPDATE character SET ${fields.join(", ")} WHERE id = $${idx}`, values);
+  }
+
+  async deleteCharacter(id: UUID): Promise<void> {
+    const db = this.getDb();
+    await db.execute("DELETE FROM character WHERE id = $1 AND is_builtin = 0", [id]);
+  }
+
   private rowToCharacter(r: CharacterRow): Character {
     return {
       id: r.id,

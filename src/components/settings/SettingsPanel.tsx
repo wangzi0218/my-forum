@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { createProvider } from "@/llm/factory";
 import { SkillManager } from "./SkillManager";
+import { CharacterManager } from "./CharacterManager";
 import type { LLMProviderType } from "@/types";
 
 export function SettingsPanel() {
@@ -149,6 +150,11 @@ export function SettingsPanel() {
           {/* Skill Management */}
           <div className="pt-4 border-t border-border dark:border-dark-border">
             <SkillManager />
+          </div>
+
+          {/* Character Management */}
+          <div className="pt-4 border-t border-border dark:border-dark-border">
+            <CharacterManager />
           </div>
         </div>
 
