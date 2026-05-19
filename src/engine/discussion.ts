@@ -3,6 +3,7 @@ import type {
   Message,
   Character,
   Skill,
+  Scenario,
   ImageAttachment,
   ChatMessage,
   DiscussionResult,
@@ -22,25 +23,8 @@ import {
 } from "./prompts";
 
 // ---------------------------------------------------------------------------
-// Constants
+// Helpers
 // ---------------------------------------------------------------------------
-
-/** 默认发言顺序 */
-const DEFAULT_SPEAKING_ORDER = ["xiao-lin", "lao-chen", "a-zhe"] as const;
-
-/** NPC 名称映射 */
-const CHARACTER_NAMES: Record<string, string> = {
-  "xiao-lin": "小林",
-  "lao-chen": "老陈",
-  "a-zhe": "阿哲",
-};
-
-/** NPC 发言前延迟（ms）— 模拟思考节奏 */
-const SPEAKING_DELAY: Record<string, number> = {
-  "xiao-lin": 500,   // 小林反应快，脱口而出
-  "lao-chen": 1000,  // 老陈沉稳，想一下再说
-  "a-zhe": 1500,     // 阿哲深思熟虑，最后收敛
-};
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,9 +37,11 @@ function sleep(ms: number): Promise<void> {
 export class DiscussionManager {
   private provider: LLMProvider;
   private settings: LLMSettings;
+  private scenario: Scenario;
 
-  constructor(settings: LLMSettings) {
+  constructor(settings: LLMSettings, scenario: Scenario) {
     this.settings = settings;
+    this.scenario = scenario;
     this.provider = createProvider(settings);
   }
 
@@ -73,15 +59,15 @@ export class DiscussionManager {
     userContent: string,
     images: ImageAttachment[],
     recentMessages: Message[],
-    characters: Character[],
     background?: string,
     previousContext?: string,
     characterSkills?: Record<string, Skill[]>,
   ): Promise<DiscussionResult> {
+    const { characters } = this.scenario;
     const newMessages: Message[] = [];
 
     // 1. 决定发言顺序
-    const speakingOrder = this.determineSpeakingOrder(userContent, recentMessages);
+    const speakingOrder = this.determineSpeakingOrder(userContent);
 
     // 2. 依次让 NPC 发言
     for (const characterId of speakingOrder) {
@@ -101,8 +87,7 @@ export class DiscussionManager {
           characterSkills?.[characterId],
         );
         newMessages.push(npcMessage);
-      } catch (err) {
-        // LLM 调用失败时使用降级回复
+      } catch {
         const fallback = this.generateFallbackResponse(chatId, characterId);
         newMessages.push(fallback);
       }
@@ -110,7 +95,7 @@ export class DiscussionManager {
 
     // 3. 检测分歧并决定是否生成选择点
     const allMessages = [...recentMessages, ...newMessages];
-    const choice = await this.checkAndGenerateChoice(chatId, allMessages, characters);
+    const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
       messages: newMessages,
@@ -130,7 +115,6 @@ export class DiscussionManager {
     userContent: string,
     images: ImageAttachment[],
     recentMessages: Message[],
-    _characters: Character[],
     onChunk: (characterId: string, chunk: string) => void,
     onMessageStart: (message: Message) => void,
     onTypingStart?: (characterId: string) => void,
@@ -138,14 +122,15 @@ export class DiscussionManager {
     previousContext?: string,
     characterSkills?: Record<string, Skill[]>,
   ): Promise<DiscussionResult> {
+    const { characters } = this.scenario;
     const newMessages: Message[] = [];
 
     // 1. 决定发言顺序
-    const speakingOrder = this.determineSpeakingOrder(userContent, recentMessages);
+    const speakingOrder = this.determineSpeakingOrder(userContent);
 
     // 2. 依次让 NPC 发言（流式）
     for (const characterId of speakingOrder) {
-      const character = _characters.find((c) => c.id === characterId);
+      const character = characters.find((c) => c.id === characterId);
       if (!character) continue;
 
       const allMessages = [...recentMessages, ...newMessages];
@@ -153,11 +138,10 @@ export class DiscussionManager {
       const chatMessages = this.buildChatMessages(systemPrompt, allMessages, images);
 
       // 发言前延迟：模拟思考节奏
-      // 小林快（反应快），老陈中（稳重），阿哲慢（深思熟虑）
       if (onTypingStart) {
         onTypingStart(character.id);
       }
-      const delayMs = SPEAKING_DELAY[character.id] ?? 800;
+      const delayMs = this.scenario.speakingDelay[character.id] ?? 800;
       await sleep(delayMs);
 
       // 创建空消息，通知 UI
@@ -201,9 +185,7 @@ export class DiscussionManager {
         };
         newMessages.push(completedMessage);
       } catch {
-        // LLM 调用失败时使用降级回复
         const fallback = this.generateFallbackResponse(chatId, characterId);
-        // 用降级内容替换空消息
         onChunk(characterId, fallback.content);
         newMessages.push({ ...emptyMessage, content: fallback.content });
       }
@@ -211,7 +193,7 @@ export class DiscussionManager {
 
     // 3. 检测分歧并决定是否生成选择点（非流式）
     const allMessages = [...recentMessages, ...newMessages];
-    const choice = await this.checkAndGenerateChoice(chatId, allMessages, _characters);
+    const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
       messages: newMessages,
@@ -268,9 +250,7 @@ export class DiscussionManager {
   private async checkAndGenerateChoice(
     chatId: UUID,
     messages: Message[],
-    _characters: Character[],
   ): Promise<Choice | undefined> {
-    // 只在有足够 NPC 发言时才检测分歧
     const npcMessages = messages.filter((m) => m.role === "character");
     if (npcMessages.length < 2) return undefined;
 
@@ -290,10 +270,8 @@ export class DiscussionManager {
       const score = typeof result?.score === "number" ? result.score : 0;
       if (!result?.hasDivergence || score < 0.5) return undefined;
 
-      // 有分歧，生成选择点
       return await this.generateChoice(chatId, messages, result);
     } catch {
-      // 分歧检测失败不影响主流程
       return undefined;
     }
   }
@@ -366,11 +344,11 @@ export class DiscussionManager {
   }
 
   /**
-   * 将角色名解析为角色 ID
+   * 将角色名解析为角色 ID（使用场景角色列表）
    */
   private resolveCharacterId(name: string): UUID {
-    for (const [id, n] of Object.entries(CHARACTER_NAMES)) {
-      if (n === name || id === name) return id;
+    for (const char of this.scenario.characters) {
+      if (char.name === name || char.id === name) return char.id;
     }
     return name;
   }
@@ -387,11 +365,9 @@ export class DiscussionManager {
       { role: "system", content: systemPrompt },
     ];
 
-    // 取最近 10 条消息作为上下文
     for (const msg of recentMessages.slice(-10)) {
       if (msg.role === "user") {
         if (msg.images.length > 0 || userImages.length > 0) {
-          // 多模态消息
           const parts: ChatMessage["content"] = [
             { type: "text" as const, text: msg.content },
           ];
@@ -416,46 +392,44 @@ export class DiscussionManager {
 
   /**
    * 决定 NPC 发言顺序
-   * 基于用户输入特征动态调整
+   * 基于用户输入特征 + 场景默认顺序动态调整
    */
   private determineSpeakingOrder(
     userInput: string,
-    _recentMessages: Message[],
   ): string[] {
     const input = userInput.toLowerCase();
+    const defaultOrder = this.scenario.speakingOrder;
+    const characters = this.scenario.characters;
 
-    // 方案先行：小林先追问
-    const proposalKeywords = ["方案", "功能", "加一个", "做一个", "实现"];
-    if (proposalKeywords.some((k) => input.includes(k))) {
-      return ["xiao-lin", "lao-chen", "a-zhe"];
+    // 基于关键词动态调整发言顺序
+    // 通用策略：检测"方案先行"→ 第一个角色先追问，"缺乏证据"→ 第二个角色先追问
+    if (characters.length >= 2) {
+      const proposalKeywords = ["方案", "功能", "加一个", "做一个", "实现"];
+      if (proposalKeywords.some((k) => input.includes(k))) {
+        return [defaultOrder[0]!, ...defaultOrder.slice(1)];
+      }
+
+      const evidenceKeywords = ["肯定", "一定", "必然", "所有人都", "用户都喜欢"];
+      if (evidenceKeywords.some((k) => input.includes(k))) {
+        return [defaultOrder[1]!, defaultOrder[0]!, ...defaultOrder.slice(2)];
+      }
     }
 
-    // 缺乏证据：老陈先追问数据
-    const evidenceKeywords = ["肯定", "一定", "必然", "所有人都", "用户都喜欢"];
-    if (evidenceKeywords.some((k) => input.includes(k))) {
-      return ["lao-chen", "xiao-lin", "a-zhe"];
-    }
-
-    // 默认顺序
-    return [...DEFAULT_SPEAKING_ORDER];
+    return [...defaultOrder];
   }
 
   /**
    * 降级回复：LLM 调用失败时使用
    */
   private generateFallbackResponse(chatId: UUID, characterId: string): Message {
-    const fallbacks: Record<string, string> = {
-      "xiao-lin": "我有个疑问，能再详细说说吗？",
-      "lao-chen": "这个问题你有相关的数据或案例吗？",
-      "a-zhe": "我们说了不少，你觉得最重要的点是什么？",
-    };
+    const fallback = this.scenario.fallbackResponses[characterId] ?? "能再补充一下吗？";
 
     return {
       id: generateId(),
       chatId,
       role: "character" as const,
       characterId,
-      content: fallbacks[characterId] ?? "能再补充一下吗？",
+      content: fallback,
       images: [],
       metadata: {
         turnNumber: 0,
@@ -469,7 +443,6 @@ export class DiscussionManager {
    */
   private parseJSON(text: string): Record<string, unknown> | null {
     try {
-      // 尝试提取 JSON 块（LLM 可能会包裹在 markdown code block 中）
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
       const jsonStr = jsonMatch ? jsonMatch[1]!.trim() : text.trim();
       return JSON.parse(jsonStr) as Record<string, unknown>;

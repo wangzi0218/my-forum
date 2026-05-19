@@ -235,3 +235,21 @@ export interface Skill {
   /** 是否内置 */
   isBuiltin: boolean;
 }
+
+// ============================================================
+// Scenario（场景包）
+// ============================================================
+
+export interface Scenario {
+  id: UUID;
+  name: string;
+  description: string;
+  /** 角色列表 */
+  characters: Character[];
+  /** 默认发言顺序（character ID 数组） */
+  speakingOrder: string[];
+  /** 每个角色发言前的思考延迟（ms） */
+  speakingDelay: Record<string, number>;
+  /** 默认降级回复（LLM 失败时使用） */
+  fallbackResponses: Record<string, string>;
+}

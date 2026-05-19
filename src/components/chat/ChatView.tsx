@@ -6,7 +6,7 @@ import { useAppStore } from "@/store/appStore";
 import { db } from "@/store/database";
 import { EmptyState } from "@/components/chat/EmptyState";
 import { DiscussionManager } from "@/engine/discussion";
-import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
+import { PM_SCENARIO } from "@/scenarios/pm-discussion";
 import { generateId } from "@/lib/utils";
 import type { Message, ImageAttachment, Skill } from "@/types";
 import { Upload, X } from "lucide-react";
@@ -81,7 +81,7 @@ export function ChatView() {
       };
 
       // 启动新一轮 NPC 讨论
-      const engine = new DiscussionManager(llmSettings);
+      const engine = new DiscussionManager(llmSettings, PM_SCENARIO);
       try {
         const characterSkills = await loadCharacterSkills();
         const currentMessages = [...useChatStore.getState().messages, syntheticMessage];
@@ -90,7 +90,6 @@ export function ChatView() {
           choiceContext,
           [],
           currentMessages,
-          CHARACTERS,
           (_characterId, chunk) => {
             const streamingId = useChatStore.getState().streamingMessageId;
             if (streamingId) {
@@ -153,7 +152,7 @@ export function ChatView() {
       }
 
       // 3. 启动 NPC 讨论（流式）
-      const engine = new DiscussionManager(llmSettings);
+      const engine = new DiscussionManager(llmSettings, PM_SCENARIO);
 
       try {
         const currentMessages = useChatStore.getState().messages;
@@ -162,7 +161,6 @@ export function ChatView() {
           content,
           images,
           currentMessages,
-          CHARACTERS,
           // onChunk: 实时更新消息内容
           (_characterId, chunk) => {
             const streamingId = useChatStore.getState().streamingMessageId;
@@ -391,7 +389,7 @@ async function readImageFiles(files: File[]): Promise<ImageAttachment[]> {
 
 async function loadCharacterSkills(): Promise<Record<string, Skill[]>> {
   const map: Record<string, Skill[]> = {};
-  for (const char of CHARACTERS) {
+  for (const char of PM_SCENARIO.characters) {
     try {
       const skills = await db.getActiveSkillsForCharacter(char.id);
       if (skills.length > 0) map[char.id] = skills;
