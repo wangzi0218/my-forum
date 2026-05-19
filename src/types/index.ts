@@ -219,3 +219,19 @@ export interface DiscussionContext {
   characters: Character[];
   turnCount: number;
 }
+
+// ============================================================
+// Skill（方法论技能）
+// ============================================================
+
+export interface Skill {
+  id: UUID;
+  name: string;
+  description: string;
+  /** 注入 NPC prompt 的指令片段 */
+  promptFragment: string;
+  /** 触发条件：当用户输入匹配时，NPC 会使用此 skill */
+  triggers: string[];
+  /** 是否内置 */
+  isBuiltin: boolean;
+}

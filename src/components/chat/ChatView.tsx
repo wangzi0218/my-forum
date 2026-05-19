@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/chat/EmptyState";
 import { DiscussionManager } from "@/engine/discussion";
 import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
 import { generateId } from "@/lib/utils";
-import type { Message, ImageAttachment } from "@/types";
+import type { Message, ImageAttachment, Skill } from "@/types";
 import { Upload, X } from "lucide-react";
 
 export function ChatView() {
@@ -83,6 +83,7 @@ export function ChatView() {
       // 启动新一轮 NPC 讨论
       const engine = new DiscussionManager(llmSettings);
       try {
+        const characterSkills = await loadCharacterSkills();
         const currentMessages = [...useChatStore.getState().messages, syntheticMessage];
         const result = await engine.processUserInputStream(
           currentChatId,
@@ -102,6 +103,8 @@ export function ChatView() {
           },
           (characterId) => setTyping(characterId),
           workspaces.find((w) => w.id === currentWorkspaceId)?.background,
+          undefined,
+          characterSkills,
         );
 
         for (const msg of result.messages) {
@@ -135,19 +138,18 @@ export function ChatView() {
       };
       await addMessage(userMessage);
 
-      // 2. 加载同工作区其他讨论的上下文
+      // 2. 加载同工作区其他讨论的上下文 + 技能
       let previousContext: string | undefined;
-      if (currentWorkspaceId) {
-        try {
-          const prevMessages = await db.getOtherChatMessages(currentWorkspaceId, currentChatId, 10);
-          if (prevMessages.length > 0) {
-            previousContext = prevMessages
-              .map((m) => m.role === "user" ? `用户：${m.content}` : `[${m.characterId ?? "NPC"}]：${m.content}`)
-              .join("\n");
-          }
-        } catch {
-          // 加载失败不影响当前讨论
-        }
+      const [prevMessages, characterSkills] = await Promise.all([
+        currentWorkspaceId
+          ? db.getOtherChatMessages(currentWorkspaceId, currentChatId, 10).catch(() => [])
+          : Promise.resolve([]),
+        loadCharacterSkills(),
+      ]);
+      if (prevMessages.length > 0) {
+        previousContext = prevMessages
+          .map((m) => m.role === "user" ? `用户：${m.content}` : `[${m.characterId ?? "NPC"}]：${m.content}`)
+          .join("\n");
       }
 
       // 3. 启动 NPC 讨论（流式）
@@ -182,6 +184,7 @@ export function ChatView() {
           // 项目背景
           workspaces.find((w) => w.id === currentWorkspaceId)?.background,
           previousContext,
+          characterSkills,
         );
 
         // 流式完成，持久化每条消息
@@ -384,4 +387,17 @@ async function readImageFiles(files: File[]): Promise<ImageAttachment[]> {
   }
 
   return results;
+}
+
+async function loadCharacterSkills(): Promise<Record<string, Skill[]>> {
+  const map: Record<string, Skill[]> = {};
+  for (const char of CHARACTERS) {
+    try {
+      const skills = await db.getActiveSkillsForCharacter(char.id);
+      if (skills.length > 0) map[char.id] = skills;
+    } catch {
+      // skill 加载失败不影响讨论
+    }
+  }
+  return map;
 }

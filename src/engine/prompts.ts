@@ -1,8 +1,8 @@
-import type { Character, Message } from "@/types";
+import type { Character, Message, Skill } from "@/types";
 
 /**
  * 为指定 NPC 构建 system prompt
- * 包含：角色人设 + 讨论上下文 + 行为规则
+ * 包含：角色人设 + 讨论上下文 + 行为规则 + 技能指令
  */
 export function buildSystemPrompt(
   character: Character,
@@ -10,6 +10,7 @@ export function buildSystemPrompt(
   _allCharacters: Character[],
   background?: string,
   previousContext?: string,
+  activeSkills?: Skill[],
 ): string {
   const messageBlock = formatMessagesForPrompt(recentMessages);
   const backgroundBlock = background?.trim()
@@ -19,8 +20,12 @@ export function buildSystemPrompt(
     ? `\n# 之前的讨论\n以下是本工作区之前讨论的部分内容，你可以在合适时引用：\n${previousContext.trim()}\n`
     : "";
 
+  const skillsBlock = activeSkills && activeSkills.length > 0
+    ? `\n# 方法论技能\n你在讨论中可以运用以下方法论能力，根据讨论内容自然地使用，不需要每次都用：\n\n${activeSkills.map((s) => s.promptFragment).join("\n\n")}\n`
+    : "";
+
   return `${character.systemPrompt}
-${backgroundBlock}${previousBlock}
+${backgroundBlock}${previousBlock}${skillsBlock}
 # 当前讨论
 以下是最近的讨论内容，请基于这些内容发言：
 

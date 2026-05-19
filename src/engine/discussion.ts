@@ -2,6 +2,7 @@ import type {
   UUID,
   Message,
   Character,
+  Skill,
   ImageAttachment,
   ChatMessage,
   DiscussionResult,
@@ -75,6 +76,7 @@ export class DiscussionManager {
     characters: Character[],
     background?: string,
     previousContext?: string,
+    characterSkills?: Record<string, Skill[]>,
   ): Promise<DiscussionResult> {
     const newMessages: Message[] = [];
 
@@ -96,6 +98,7 @@ export class DiscussionManager {
           images,
           background,
           previousContext,
+          characterSkills?.[characterId],
         );
         newMessages.push(npcMessage);
       } catch (err) {
@@ -133,6 +136,7 @@ export class DiscussionManager {
     onTypingStart?: (characterId: string) => void,
     background?: string,
     previousContext?: string,
+    characterSkills?: Record<string, Skill[]>,
   ): Promise<DiscussionResult> {
     const newMessages: Message[] = [];
 
@@ -145,7 +149,7 @@ export class DiscussionManager {
       if (!character) continue;
 
       const allMessages = [...recentMessages, ...newMessages];
-      const systemPrompt = buildSystemPrompt(character, allMessages, [], background, previousContext);
+      const systemPrompt = buildSystemPrompt(character, allMessages, [], background, previousContext, characterSkills?.[characterId]);
       const chatMessages = this.buildChatMessages(systemPrompt, allMessages, images);
 
       // 发言前延迟：模拟思考节奏
@@ -226,8 +230,9 @@ export class DiscussionManager {
     userImages: ImageAttachment[],
     background?: string,
     previousContext?: string,
+    activeSkills?: Skill[],
   ): Promise<Message> {
-    const systemPrompt = buildSystemPrompt(character, recentMessages, [], background, previousContext);
+    const systemPrompt = buildSystemPrompt(character, recentMessages, [], background, previousContext, activeSkills);
     const chatMessages = this.buildChatMessages(systemPrompt, recentMessages, userImages);
 
     const request = {

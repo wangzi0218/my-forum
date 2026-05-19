@@ -15,5 +15,11 @@ pub fn migrations() -> Vec<Migration> {
             sql: include_str!("../migrations/002_workspace_background.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "skill",
+            sql: include_str!("../migrations/003_skill.sql"),
+            kind: MigrationKind::Up,
+        },
     ]
 }

@@ -10,6 +10,7 @@ import type {
   ChoiceOption,
   CharacterPreference,
   Character,
+  Skill,
   AppSettings,
   LLMSettings,
 } from "@/types";
@@ -34,6 +35,16 @@ interface CharacterRow {
   capabilities: string;
   trigger_conditions: string;
   system_prompt: string;
+  is_builtin: number;
+  created_at: string;
+}
+
+interface SkillRow {
+  id: string;
+  name: string;
+  description: string;
+  prompt_fragment: string;
+  triggers: string;
   is_builtin: number;
   created_at: string;
 }
@@ -441,6 +452,60 @@ class DatabaseManager {
       systemPrompt: r.system_prompt,
       isBuiltin: r.is_builtin === 1,
       createdAt: r.created_at,
+    };
+  }
+
+  // =========================================================================
+  // Skill
+  // =========================================================================
+
+  async listSkills(): Promise<Skill[]> {
+    const db = this.getDb();
+    const rows = await db.select<SkillRow[]>("SELECT * FROM skill ORDER BY created_at ASC");
+    return rows.map(this.rowToSkill);
+  }
+
+  async getActiveSkillsForCharacter(characterId: UUID): Promise<Skill[]> {
+    const db = this.getDb();
+    const rows = await db.select<Array<SkillRow & { cs_enabled: number }>>(
+      `SELECT s.*, cs.enabled as cs_enabled
+       FROM skill s
+       JOIN character_skill cs ON cs.skill_id = s.id
+       WHERE cs.character_id = $1 AND cs.enabled = 1
+       ORDER BY s.created_at ASC`,
+      [characterId],
+    );
+    return rows.map(this.rowToSkill);
+  }
+
+  async setCharacterSkill(characterId: UUID, skillId: UUID, enabled: boolean): Promise<void> {
+    const db = this.getDb();
+    const id = `cs-${characterId}-${skillId.replace("skill-", "")}`;
+    await db.execute(
+      `INSERT INTO character_skill (id, character_id, skill_id, enabled)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT(character_id, skill_id) DO UPDATE SET enabled = $4`,
+      [id, characterId, skillId, enabled ? 1 : 0],
+    );
+  }
+
+  async listCharacterSkills(characterId: UUID): Promise<Array<{ skillId: UUID; enabled: boolean }>> {
+    const db = this.getDb();
+    const rows = await db.select<Array<{ skill_id: string; enabled: number }>>(
+      "SELECT skill_id, enabled FROM character_skill WHERE character_id = $1",
+      [characterId],
+    );
+    return rows.map((r) => ({ skillId: r.skill_id, enabled: r.enabled === 1 }));
+  }
+
+  private rowToSkill(r: SkillRow): Skill {
+    return {
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      promptFragment: r.prompt_fragment,
+      triggers: JSON.parse(r.triggers) as string[],
+      isBuiltin: r.is_builtin === 1,
     };
   }
 
