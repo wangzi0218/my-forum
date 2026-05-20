@@ -94,15 +94,12 @@ export class DiscussionManager {
       }
     }
 
-    // Filter out "跳" responses (NPC decided topic is irrelevant)
-    const filteredMessages = newMessages.filter((m) => m.content.trim() !== "跳");
-
     // 3. 检测分歧并决定是否生成选择点
-    const allMessages = [...recentMessages, ...filteredMessages];
+    const allMessages = [...recentMessages, ...newMessages];
     const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
-      messages: filteredMessages,
+      messages: newMessages,
       choice,
       converged: false,
     };
@@ -196,15 +193,12 @@ export class DiscussionManager {
       }
     }
 
-    // Filter out "跳" responses (NPC decided topic is irrelevant)
-    const filteredMessages = newMessages.filter((m) => m.content.trim() !== "跳");
-
     // 3. 检测分歧并决定是否生成选择点（非流式）
-    const allMessages = [...recentMessages, ...filteredMessages];
+    const allMessages = [...recentMessages, ...newMessages];
     const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
-      messages: filteredMessages,
+      messages: newMessages,
       choice,
       converged: false,
     };
