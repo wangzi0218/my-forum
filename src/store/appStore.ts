@@ -78,6 +78,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
 
+    // 清理重复的默认工作区（将聊天合并到第一个，删除多余的）
+    if (workspaces.length > 1) {
+      const defaultWorkspaces = workspaces.filter((w) => w.name === "默认工作区");
+      if (defaultWorkspaces.length > 1) {
+        const keep = defaultWorkspaces[0]!;
+        const remove = defaultWorkspaces.slice(1);
+        for (const ws of remove) {
+          const wsChats = await db.listChats(ws.id);
+          for (const chat of wsChats) {
+            await db.moveChatToWorkspace(chat.id, keep.id);
+          }
+          await db.deleteWorkspace(ws.id);
+        }
+        const cleaned = await db.listWorkspaces();
+        set({ workspaces: cleaned });
+      }
+    }
+
     // 加载第一个工作区的讨论列表
     const firstWs = workspaces[0]!;
     const chats = await db.listChats(firstWs.id);

@@ -193,6 +193,11 @@ class DatabaseManager {
     await db.execute("DELETE FROM chat WHERE id = $1", [id]);
   }
 
+  async moveChatToWorkspace(chatId: UUID, workspaceId: UUID): Promise<void> {
+    const db = this.getDb();
+    await db.execute("UPDATE chat SET workspace_id = $1 WHERE id = $2", [workspaceId, chatId]);
+  }
+
   // =========================================================================
   // Message
   // =========================================================================
