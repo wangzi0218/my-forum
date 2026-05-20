@@ -1,15 +1,12 @@
-import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
-
-const characterMap = new Map(CHARACTERS.map((c) => [c.id, c]));
+import { getCharacterName, getCharacterColor } from "@/lib/characters";
 
 interface TypingIndicatorProps {
   characterId: string;
 }
 
 export function TypingIndicator({ characterId }: TypingIndicatorProps) {
-  const character = characterMap.get(characterId);
-  const name = character?.name ?? "NPC";
-  const color = character?.color ?? "#6b7280";
+  const name = getCharacterName(characterId);
+  const color = getCharacterColor(characterId);
 
   return (
     <div className="flex gap-3">

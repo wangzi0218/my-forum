@@ -1,9 +1,7 @@
 import { useState } from "react";
 import type { Message, ImageAttachment, MessageQuote } from "@/types";
-import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
+import { getCharacter } from "@/lib/characters";
 import { X } from "lucide-react";
-
-const characterMap = new Map(CHARACTERS.map((c) => [c.id, c]));
 
 interface NPCMessageProps {
   message: Message;
@@ -12,7 +10,7 @@ interface NPCMessageProps {
 
 export function NPCMessage({ message, isStreaming }: NPCMessageProps) {
   const character = message.characterId
-    ? characterMap.get(message.characterId)
+    ? getCharacter(message.characterId)
     : undefined;
 
   const name = character?.name ?? "NPC";

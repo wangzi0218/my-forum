@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { db } from "@/store/database";
-import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
+import { CHARACTERS as PM_CHARACTERS } from "@/scenarios/pm-discussion/characters";
+import { CHARACTERS as ENG_CHARACTERS } from "@/scenarios/engineering-review/characters";
 import type { Skill } from "@/types";
+
+const ALL_CHARACTERS = [...PM_CHARACTERS, ...ENG_CHARACTERS];
 
 interface CharacterSkillState {
   [characterId: string]: { [skillId: string]: boolean };
@@ -22,7 +25,7 @@ export function SkillManager() {
       setSkills(allSkills);
 
       const newState: CharacterSkillState = {};
-      for (const char of CHARACTERS) {
+      for (const char of ALL_CHARACTERS) {
         const assignments = await db.listCharacterSkills(char.id);
         const charSkills: Record<string, boolean> = {};
         for (const skill of allSkills) {
@@ -94,7 +97,7 @@ export function SkillManager() {
       </p>
 
       <div className="space-y-3">
-        {CHARACTERS.map((char) => (
+        {ALL_CHARACTERS.map((char) => (
           <div
             key={char.id}
             className="rounded-lg border border-border dark:border-dark-border p-3 space-y-2"

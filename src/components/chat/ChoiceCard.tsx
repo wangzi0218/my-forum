@@ -1,8 +1,6 @@
 import { Check, Zap } from "lucide-react";
 import type { ChoiceOption, PreferenceLeaning } from "@/types";
-import { CHARACTERS } from "@/scenarios/pm-discussion/characters";
-
-const characterMap = new Map(CHARACTERS.map((c) => [c.id, c]));
+import { getCharacter } from "@/lib/characters";
 
 const leaningLabel: Record<PreferenceLeaning, string> = {
   strong: "强烈推荐",
@@ -117,7 +115,7 @@ function OptionCard({ option, isSelected, isDisabled, onClick }: OptionCardProps
           {option.characterPreferences.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {option.characterPreferences.map((pref) => {
-                const character = characterMap.get(pref.characterId);
+                const character = getCharacter(pref.characterId);
                 if (!character) return null;
                 return (
                   <span

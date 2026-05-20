@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "@/store/chatStore";
+import { useAppStore } from "@/store/appStore";
 import { NPCMessage } from "@/components/chat/NPCMessage";
 import { UserMessage } from "@/components/chat/UserMessage";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
@@ -15,18 +16,28 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
   const messages = useChatStore((s) => s.messages);
   const isTyping = useChatStore((s) => s.isTyping);
   const typingCharacterId = useChatStore((s) => s.typingCharacterId);
+  const currentChatId = useAppStore((s) => s.currentChatId);
   const currentChoice = useChatStore((s) => s.currentChoice);
   const resolvedChoices = useChatStore((s) => s.resolvedChoices);
   const streamingMessageId = useChatStore((s) => s.streamingMessageId);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const prevChatIdRef = useRef<string | null>(null);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
+
+  // Reset scroll to bottom when switching conversations
+  useEffect(() => {
+    if (currentChatId !== prevChatIdRef.current) {
+      prevChatIdRef.current = currentChatId;
+      requestAnimationFrame(() => scrollToBottom("instant"));
+    }
+  }, [currentChatId, scrollToBottom]);
 
   // Auto-scroll when messages change or typing starts
   useEffect(() => {
