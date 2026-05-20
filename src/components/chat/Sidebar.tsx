@@ -142,7 +142,7 @@ export function Sidebar() {
   return (
     <aside className="w-[280px] shrink-0 border-r border-border dark:border-dark-border flex flex-col bg-background-secondary dark:bg-dark-background-secondary">
       {/* Header */}
-      <div className="p-4 border-b border-border dark:border-dark-border">
+      <div className="px-4 py-3 border-b border-border dark:border-dark-border">
         <h1 className="text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary">
           我的团队
         </h1>
