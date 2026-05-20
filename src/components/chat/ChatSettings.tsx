@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Users, FileText, Save } from "lucide-react";
+import { X, Users, FileText, Save, Trash2 } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
+import { db } from "@/store/database";
 import { CHARACTERS as PM_CHARACTERS } from "@/scenarios/pm-discussion/characters";
 import { CHARACTERS as ENG_CHARACTERS } from "@/scenarios/engineering-review/characters";
 import type { Chat } from "@/types";
@@ -127,7 +128,7 @@ export function ChatSettings({ chat, onClose }: ChatSettingsProps) {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border dark:border-dark-border">
+        <div className="p-4 border-t border-border dark:border-dark-border space-y-2">
           <button
             onClick={handleSave}
             className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
@@ -135,6 +136,24 @@ export function ChatSettings({ chat, onClose }: ChatSettingsProps) {
             <Save size={14} />
             {saved ? "已保存" : "保存"}
           </button>
+          {/* Delete — only for group chats (more than 1 member) */}
+          {characterIds.length > 1 && (
+            <button
+              onClick={async () => {
+                if (!window.confirm(`确定要删除群聊「${title}」吗？此操作不可撤销。`)) return;
+                await db.deleteChat(chat.id);
+                useAppStore.setState((s) => ({
+                  chats: s.chats.filter((c) => c.id !== chat.id),
+                  currentChatId: s.currentChatId === chat.id ? null : s.currentChatId,
+                }));
+                onClose();
+              }}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-red-600 border border-red-200 dark:border-red-800/40 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+            >
+              <Trash2 size={14} />
+              删除群聊
+            </button>
+          )}
         </div>
       </div>
     </div>

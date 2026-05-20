@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAppStore } from "@/store/appStore";
-import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload, Trash2 } from "lucide-react";
+import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload } from "lucide-react";
 import { generateId } from "@/lib/utils";
 import { db } from "@/store/database";
 import { useChatStore } from "@/store/chatStore";
@@ -123,13 +123,82 @@ export function Sidebar() {
     chats: chats.filter((c) => c.workspaceId === ws.id),
   }));
 
+  // Find or create a private chat with a specific NPC
+  const handleOpenPrivateChat = useCallback(async (characterId: string) => {
+    // Check if a private chat already exists with this NPC
+    const existing = chats.find((c) =>
+      c.characterIds.length === 1 && c.characterIds[0] === characterId,
+    );
+    if (existing) {
+      await setCurrentChat(existing.id);
+      return;
+    }
+
+    // Create new private chat
+    let workspaceId: UUID;
+    if (workspaces.length > 0) {
+      workspaceId = workspaces[0]!.id;
+    } else {
+      const ws: Workspace = {
+        id: generateId(),
+        name: "默认工作区",
+        background: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await addWorkspace(ws);
+      workspaceId = ws.id;
+    }
+
+    const char = getCharacter(characterId);
+    const chat: Chat = {
+      id: generateId(),
+      workspaceId,
+      title: char?.name ?? "私聊",
+      status: "active",
+      characterIds: [characterId],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await addChat(chat);
+    setCurrentWorkspace(workspaceId);
+    await setCurrentChat(chat.id);
+  }, [chats, workspaces, addWorkspace, addChat, setCurrentWorkspace, setCurrentChat]);
+
   return (
     <aside className="w-[280px] shrink-0 border-r border-border dark:border-dark-border flex flex-col bg-background-secondary dark:bg-dark-background-secondary">
       {/* Header */}
       <div className="p-4 border-b border-border dark:border-dark-border">
         <h1 className="text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary">
-          PM Workflow Harness
+          我的团队
         </h1>
+      </div>
+
+      {/* Contacts — click to open private chat */}
+      <div className="px-3 py-2 border-b border-border dark:border-dark-border">
+        <div className="text-[11px] font-medium text-foreground-secondary dark:text-dark-foreground-secondary uppercase tracking-wider mb-1.5">
+          同事
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {ALL_CHARACTERS.map((char) => (
+            <button
+              key={char.id}
+              onClick={() => handleOpenPrivateChat(char.id)}
+              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md hover:bg-background dark:hover:bg-dark-background transition-colors group"
+              title={`与 ${char.name} 私聊`}
+            >
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium text-white shrink-0"
+                style={{ backgroundColor: char.color }}
+              >
+                {char.avatar}
+              </div>
+              <span className="text-foreground dark:text-dark-foreground group-hover:text-primary transition-colors">
+                {char.name}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Workspace & Chat List */}
@@ -304,20 +373,6 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(chat.title);
   const updateChat = useAppStore((s) => s.updateChat);
-  const currentChatId = useAppStore((s) => s.currentChatId);
-  const setCurrentChat = useAppStore((s) => s.setCurrentChat);
-
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm(`确定要删除对话「${chat.title}」吗？`)) return;
-    await db.deleteChat(chat.id);
-    useAppStore.setState((s) => ({
-      chats: s.chats.filter((c) => c.id !== chat.id),
-    }));
-    if (currentChatId === chat.id) {
-      await setCurrentChat(null);
-    }
-  };
 
   const handleRename = async () => {
     const trimmed = editTitle.trim();
@@ -378,14 +433,6 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
           </span>
         )}
       </div>
-      {/* Delete button */}
-      <button
-        onClick={handleDelete}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 transition-opacity"
-        title="删除对话"
-      >
-        <Trash2 size={12} className="text-red-500" />
-      </button>
     </div>
   );
 }
