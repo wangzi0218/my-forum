@@ -30,11 +30,12 @@ export function Sidebar() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error("Export failed:", e);
+      alert(`导出失败：${e instanceof Error ? e.message : String(e)}`);
     }
   }, [currentWorkspaceId]);
 
   const handleImport = useCallback(async () => {
+    if (!window.confirm("导入将覆盖当前工作区数据，确定继续吗？")) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
@@ -44,13 +45,12 @@ export function Sidebar() {
       try {
         const text = await file.text();
         const wsId = await db.importWorkspace(text);
-        // 重新加载工作区列表
         const workspaces = await db.listWorkspaces();
         const chats = await db.listChats(wsId);
         useAppStore.setState({ workspaces, chats, currentWorkspaceId: wsId, currentChatId: null });
         useChatStore.getState().clearMessages();
       } catch (e) {
-        console.error("Import failed:", e);
+        alert(`导入失败：${e instanceof Error ? e.message : String(e)}`);
       }
     };
     input.click();

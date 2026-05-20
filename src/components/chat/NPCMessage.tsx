@@ -43,7 +43,7 @@ export function NPCMessage({ message, isStreaming }: NPCMessageProps) {
           </span>
         </div>
         <div
-          className="rounded-[var(--radius-bubble)] px-4 py-3 text-sm leading-relaxed border"
+          className="rounded-[var(--radius-bubble)] px-4 py-3 text-sm leading-relaxed border whitespace-pre-wrap"
           style={{
             backgroundColor: `${color}10`,
             borderColor: `${color}25`,

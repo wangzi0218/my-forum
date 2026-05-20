@@ -72,7 +72,16 @@ export function SkillManager() {
   }
 
   if (skills.length === 0) {
-    return null;
+    return (
+      <div className="space-y-4">
+        <h3 className="text-sm font-medium text-foreground-secondary dark:text-dark-foreground-secondary">
+          技能管理
+        </h3>
+        <p className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary">
+          暂无可用技能。重启应用后内置技能会自动加载。
+        </p>
+      </div>
+    );
   }
 
   return (

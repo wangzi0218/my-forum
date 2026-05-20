@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { X, Bot, Users, Zap } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { createProvider } from "@/llm/factory";
@@ -25,12 +25,29 @@ export function SettingsPanel() {
   const [apiKey, setApiKey] = useState(settings.llm.apiKey);
   const [model, setModel] = useState(settings.llm.model);
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const isDirty =
+    provider !== settings.llm.provider ||
+    baseUrl !== settings.llm.baseUrl ||
+    apiKey !== settings.llm.apiKey ||
+    model !== settings.llm.model;
+
+  const handleClose = useCallback(() => {
+    if (isDirty && !window.confirm("有未保存的更改，确定离开吗？")) return;
+    closeSettings();
+  }, [isDirty, closeSettings]);
 
   const handleSave = async () => {
-    await updateSettings({
-      llm: { provider, baseUrl, apiKey, model },
-    });
-    closeSettings();
+    setSaving(true);
+    try {
+      await updateSettings({
+        llm: { provider, baseUrl, apiKey, model },
+      });
+      closeSettings();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTest = async () => {
@@ -52,21 +69,36 @@ export function SettingsPanel() {
     }
   };
 
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleClose]);
+
+  const handleTabChange = (tab: SettingsTab) => {
+    setActiveTab(tab);
+    setTestResult(null);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/30"
-        onClick={closeSettings}
+        onClick={handleClose}
       />
 
       {/* Panel */}
-      <div className="ml-auto w-[420px] bg-background dark:bg-dark-background border-l border-border dark:border-dark-border flex flex-col relative">
+      <div className="ml-auto w-[420px] bg-background dark:bg-dark-background border-l border-border dark:border-dark-border flex flex-col relative" role="dialog" aria-modal="true" aria-label="设置">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border dark:border-dark-border">
           <h2 className="text-base font-semibold">设置</h2>
           <button
-            onClick={closeSettings}
+            onClick={handleClose}
+            aria-label="关闭设置"
             className="p-1 hover:bg-background-chat dark:hover:bg-dark-background-chat rounded-md transition-colors"
           >
             <X size={18} />
@@ -80,7 +112,7 @@ export function SettingsPanel() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm transition-colors ${
                   activeTab === tab.id
                     ? "text-primary border-b-2 border-primary font-medium"
@@ -183,9 +215,10 @@ export function SettingsPanel() {
           <div className="p-4 border-t border-border dark:border-dark-border">
             <button
               onClick={handleSave}
-              className="w-full px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
+              disabled={saving}
+              className="w-full px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              保存
+              {saving ? "保存中..." : "保存"}
             </button>
           </div>
         )}

@@ -10,7 +10,7 @@ export function UserMessage({ message }: UserMessageProps) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[70%]">
-        <div className="bg-background-chat dark:bg-dark-background-chat rounded-[var(--radius-bubble)] px-4 py-3 text-sm leading-relaxed">
+        <div className="bg-background-chat dark:bg-dark-background-chat rounded-[var(--radius-bubble)] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">
           {message.content}
 
           {/* Image attachments */}

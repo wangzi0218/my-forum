@@ -26,7 +26,8 @@ export function CharacterManager() {
     loadCharacters();
   }, [loadCharacters]);
 
-  const handleDelete = useCallback(async (id: string) => {
+  const handleDelete = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`确定要删除角色「${name}」吗？此操作不可撤销。`)) return;
     await db.deleteCharacter(id);
     setCharacters((prev) => prev.filter((c) => c.id !== id));
   }, []);
@@ -73,6 +74,11 @@ export function CharacterManager() {
       )}
 
       <div className="space-y-2">
+        {characters.length === 0 && !showCreate && (
+          <p className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary text-center py-4">
+            暂无自定义角色，点击上方「新建」创建第一个。
+          </p>
+        )}
         {characters.map((char) => (
           <div key={char.id}>
             {editingId === char.id ? (
@@ -117,7 +123,7 @@ export function CharacterManager() {
                   </button>
                   {!char.isBuiltin && (
                     <button
-                      onClick={() => handleDelete(char.id)}
+                      onClick={() => handleDelete(char.id, char.name)}
                       className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 rounded transition-colors"
                       title="删除"
                     >

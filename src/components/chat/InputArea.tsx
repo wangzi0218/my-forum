@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Paperclip, X } from "lucide-react";
 import { useChatStore } from "@/store/chatStore";
-import { generateId } from "@/lib/utils";
+import { readImageFiles } from "@/lib/images";
 import type { ImageAttachment } from "@/types";
 
 interface InputAreaProps {
@@ -101,7 +101,7 @@ export function InputArea({
               />
               <button
                 onClick={() => onRemoveImage(img.id)}
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
               >
                 <X size={10} />
               </button>
@@ -150,31 +150,4 @@ export function InputArea({
       </div>
     </div>
   );
-}
-
-async function readImageFiles(files: File[]): Promise<ImageAttachment[]> {
-  const results: ImageAttachment[] = [];
-
-  for (const file of files) {
-    if (!file.type.startsWith("image/")) continue;
-
-    const base64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = (reader.result as string).split(",")[1] ?? "";
-        resolve(result);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    results.push({
-      id: generateId(),
-      filename: file.name,
-      mimeType: file.type,
-      localPath: "",
-      data: base64,
-    });
-  }
-
-  return results;
 }

@@ -9,6 +9,7 @@ import { DiscussionManager } from "@/engine/discussion";
 import { getScenario } from "@/scenarios/registry";
 import { DEFAULT_SCENARIO } from "@/scenarios/registry";
 import { generateId } from "@/lib/utils";
+import { readImageFiles } from "@/lib/images";
 import type { Message, ImageAttachment, Skill, Character, Chat, Workspace } from "@/types";
 import { Upload, X } from "lucide-react";
 
@@ -393,33 +394,6 @@ function parseLLMError(err: unknown): { text: string; showSettingsLink: boolean 
     return { text: "网络连接失败，请检查网络", showSettingsLink: false };
   }
   return { text: `请求失败：${msg}`, showSettingsLink: false };
-}
-
-async function readImageFiles(files: File[]): Promise<ImageAttachment[]> {
-  const results: ImageAttachment[] = [];
-
-  for (const file of files) {
-    if (!file.type.startsWith("image/")) continue;
-
-    const base64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = (reader.result as string).split(",")[1] ?? "";
-        resolve(result);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    results.push({
-      id: generateId(),
-      filename: file.name,
-      mimeType: file.type,
-      localPath: "",
-      data: base64,
-    });
-  }
-
-  return results;
 }
 
 async function loadCharacterSkills(characters: Character[]): Promise<Record<string, Skill[]>> {
