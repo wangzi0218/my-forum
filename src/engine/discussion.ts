@@ -62,8 +62,9 @@ export class DiscussionManager {
     background?: string,
     previousContext?: string,
     characterSkills?: Record<string, Skill[]>,
+    characters?: Character[],
   ): Promise<DiscussionResult> {
-    const { characters } = this.scenario;
+    const chars = characters ?? this.scenario.characters;
     const newMessages: Message[] = [];
 
     // 1. 决定发言顺序
@@ -71,7 +72,7 @@ export class DiscussionManager {
 
     // 2. 依次让 NPC 发言
     for (const characterId of speakingOrder) {
-      const character = characters.find((c) => c.id === characterId);
+      const character = chars.find((c) => c.id === characterId);
       if (!character) continue;
 
       const allMessages = [...recentMessages, ...newMessages];
@@ -121,8 +122,9 @@ export class DiscussionManager {
     background?: string,
     previousContext?: string,
     characterSkills?: Record<string, Skill[]>,
+    characters?: Character[],
   ): Promise<DiscussionResult> {
-    const { characters } = this.scenario;
+    const chars = characters ?? this.scenario.characters;
     const newMessages: Message[] = [];
 
     // 1. 决定发言顺序
@@ -130,7 +132,7 @@ export class DiscussionManager {
 
     // 2. 依次让 NPC 发言（流式）
     for (const characterId of speakingOrder) {
-      const character = characters.find((c) => c.id === characterId);
+      const character = chars.find((c) => c.id === characterId);
       if (!character) continue;
 
       const allMessages = [...recentMessages, ...newMessages];

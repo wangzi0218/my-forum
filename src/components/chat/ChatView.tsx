@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/chat/EmptyState";
 import { DiscussionManager } from "@/engine/discussion";
 import { getScenario } from "@/scenarios/registry";
 import { DEFAULT_SCENARIO } from "@/scenarios/registry";
+import { getCharacter } from "@/lib/characters";
 import { generateId } from "@/lib/utils";
 import { readImageFiles } from "@/lib/images";
 import type { Message, ImageAttachment, Skill, Character, Chat, Workspace } from "@/types";
@@ -33,7 +34,14 @@ export function ChatView() {
   const workspaces = useAppStore((s) => s.workspaces);
   const currentWorkspaceId = useAppStore((s) => s.currentWorkspaceId);
   const currentScenarioId = useAppStore((s) => s.currentScenarioId);
+  const chats = useAppStore((s) => s.chats);
   const scenario = getScenario(currentScenarioId) ?? DEFAULT_SCENARIO;
+
+  // Resolve current chat's NPCs from characterIds, fallback to scenario defaults
+  const currentChat = chats.find((c) => c.id === currentChatId);
+  const chatCharacters = currentChat?.characterIds
+    ? currentChat.characterIds.map((id) => getCharacter(id)).filter(Boolean) as Character[]
+    : scenario.characters;
 
   const [pendingImages, setPendingImages] = useState<ImageAttachment[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -87,7 +95,7 @@ export function ChatView() {
       // 启动新一轮 NPC 讨论
       const engine = new DiscussionManager(llmSettings, scenario);
       try {
-        const characterSkills = await loadCharacterSkills(scenario.characters);
+        const characterSkills = await loadCharacterSkills(chatCharacters);
         const currentMessages = [...useChatStore.getState().messages, syntheticMessage];
         const result = await engine.processUserInputStream(
           currentChatId,
@@ -108,6 +116,7 @@ export function ChatView() {
           workspaces.find((w) => w.id === currentWorkspaceId)?.background,
           undefined,
           characterSkills,
+          chatCharacters,
         );
 
         for (const msg of result.messages) {
@@ -154,6 +163,7 @@ export function ChatView() {
           workspaceId,
           title: content.slice(0, 20) + (content.length > 20 ? "..." : ""),
           status: "active",
+          characterIds: chatCharacters.map((c) => c.id),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -179,7 +189,7 @@ export function ChatView() {
         currentWorkspaceId
           ? db.getOtherChatMessages(currentWorkspaceId, activeChatId, 10).catch(() => [])
           : Promise.resolve([]),
-        loadCharacterSkills(scenario.characters),
+        loadCharacterSkills(chatCharacters),
       ]);
       if (prevMessages.length > 0) {
         previousContext = prevMessages
@@ -219,6 +229,7 @@ export function ChatView() {
           workspaces.find((w) => w.id === currentWorkspaceId)?.background,
           previousContext,
           characterSkills,
+          chatCharacters,
         );
 
         // 流式完成，持久化每条消息

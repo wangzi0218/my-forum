@@ -32,6 +32,7 @@ export interface Chat {
   workspaceId: UUID;
   title: string;
   status: ChatStatus;
+  characterIds: UUID[];
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }

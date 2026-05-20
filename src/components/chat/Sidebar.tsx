@@ -78,6 +78,7 @@ export function Sidebar() {
       workspaceId,
       title: "新讨论",
       status: "active",
+      characterIds: activeScenario.characters.map((c) => c.id),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

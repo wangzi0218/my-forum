@@ -152,15 +152,15 @@ class DatabaseManager {
     const db = this.getDb();
     const now = new Date().toISOString();
     await db.execute(
-      "INSERT INTO chat (id, workspace_id, title, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-      [chat.id, chat.workspaceId, chat.title, chat.status, now, now],
+      "INSERT INTO chat (id, workspace_id, title, status, character_ids, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [chat.id, chat.workspaceId, chat.title, chat.status, JSON.stringify(chat.characterIds ?? []), now, now],
     );
     return { ...chat, createdAt: now, updatedAt: now };
   }
 
   async listChats(workspaceId: UUID): Promise<Chat[]> {
     const db = this.getDb();
-    const rows = await db.select<Array<{ id: string; workspace_id: string; title: string; status: string; created_at: string; updated_at: string }>>(
+    const rows = await db.select<Array<{ id: string; workspace_id: string; title: string; status: string; character_ids: string; created_at: string; updated_at: string }>>(
       "SELECT * FROM chat WHERE workspace_id = $1 ORDER BY updated_at DESC",
       [workspaceId],
     );
@@ -169,18 +169,22 @@ class DatabaseManager {
       workspaceId: r.workspace_id,
       title: r.title,
       status: r.status as Chat["status"],
+      characterIds: JSON.parse(r.character_ids) as string[],
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
   }
 
-  async updateChat(id: UUID, updates: Partial<Pick<Chat, "title" | "status">>): Promise<void> {
+  async updateChat(id: UUID, updates: Partial<Pick<Chat, "title" | "status" | "characterIds">>): Promise<void> {
     const db = this.getDb();
     if (updates.title !== undefined) {
       await db.execute("UPDATE chat SET title = $1 WHERE id = $2", [updates.title, id]);
     }
     if (updates.status !== undefined) {
       await db.execute("UPDATE chat SET status = $1 WHERE id = $2", [updates.status, id]);
+    }
+    if (updates.characterIds !== undefined) {
+      await db.execute("UPDATE chat SET character_ids = $1 WHERE id = $2", [JSON.stringify(updates.characterIds), id]);
     }
   }
 
@@ -692,6 +696,7 @@ class DatabaseManager {
         workspaceId: ws.id,
         title: chat.title,
         status: chat.status as Chat["status"],
+        characterIds: (chat as Record<string, unknown>).characterIds as string[] ?? [],
       });
 
       for (const msg of chat.messages) {
