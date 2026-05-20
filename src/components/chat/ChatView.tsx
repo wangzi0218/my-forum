@@ -103,7 +103,7 @@ export function ChatView() {
           [],
           currentMessages,
           (_characterId, chunk) => {
-            const streamingId = useChatStore.getState().streamingMessageId;
+            const streamingId = useChatStore.getState().streamingMessage?.id;
             if (streamingId) {
               appendStreamChunk(streamingId, chunk);
             }
@@ -209,7 +209,7 @@ export function ChatView() {
           currentMessages,
           // onChunk: 实时更新消息内容
           (_characterId, chunk) => {
-            const streamingId = useChatStore.getState().streamingMessageId;
+            const streamingId = useChatStore.getState().streamingMessage?.id;
             if (streamingId) {
               appendStreamChunk(streamingId, chunk);
             }

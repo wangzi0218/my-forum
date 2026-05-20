@@ -14,13 +14,18 @@ interface MessageListProps {
 
 export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) {
   const messages = useChatStore((s) => s.messages);
+  const streamingMessage = useChatStore((s) => s.streamingMessage);
   const isTyping = useChatStore((s) => s.isTyping);
   const typingCharacterId = useChatStore((s) => s.typingCharacterId);
   const isLoading = useChatStore((s) => s.isLoading);
   const currentChatId = useAppStore((s) => s.currentChatId);
   const currentChoice = useChatStore((s) => s.currentChoice);
   const resolvedChoices = useChatStore((s) => s.resolvedChoices);
-  const streamingMessageId = useChatStore((s) => s.streamingMessageId);
+
+  // Compute display messages: DB messages + streaming message if it belongs to current chat
+  const displayMessages = streamingMessage && streamingMessage.chatId === currentChatId
+    ? [...messages, streamingMessage]
+    : messages;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -64,7 +69,7 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
     } else {
       setShowScrollButton(true);
     }
-  }, [messages, isTyping, scrollToBottom]);
+  }, [displayMessages, isTyping, scrollToBottom]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -85,19 +90,19 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
         role="log"
         aria-live="polite"
       >
-        {messages.map((msg) =>
+        {displayMessages.map((msg) =>
           msg.role === "user" ? (
             <div key={msg.id} className="animate-message-in">
               <UserMessage message={msg} />
             </div>
           ) : msg.role === "character" ? (
             <div key={msg.id} className="animate-message-in">
-              <NPCMessage message={msg} isStreaming={msg.id === streamingMessageId} />
+              <NPCMessage message={msg} isStreaming={msg.id === streamingMessage?.id} />
             </div>
           ) : null
         )}
 
-        {isTyping && typingCharacterId && !streamingMessageId && (
+        {isTyping && typingCharacterId && !streamingMessage && (
           <TypingIndicator characterId={typingCharacterId} />
         )}
 
