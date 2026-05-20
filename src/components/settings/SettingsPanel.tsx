@@ -204,20 +204,30 @@ function LLMConfigTab({
 
   return (
     <div className="space-y-4">
-      {/* Provider Preset */}
+      {/* Provider Grid */}
       <div className="space-y-1.5">
         <label className="text-sm">服务提供商</label>
-        <select
-          value={selectedPresetId}
-          onChange={(e) => handlePresetChange(e.target.value)}
-          className="w-full px-3 py-2 text-sm bg-background-chat dark:bg-dark-background-chat rounded-md border border-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-primary/50"
-        >
+        <div className="grid grid-cols-4 gap-2">
           {PROVIDER_PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
+            <button
+              key={p.id}
+              onClick={() => handlePresetChange(p.id)}
+              className={`flex flex-col items-center gap-1.5 px-2 py-2.5 rounded-lg border transition-all ${
+                selectedPresetId === p.id
+                  ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                  : "border-border dark:border-dark-border hover:border-foreground/20 dark:hover:border-dark-foreground/20"
+              }`}
+            >
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white"
+                style={{ backgroundColor: p.color }}
+              >
+                {p.icon}
+              </div>
+              <span className="text-[11px] font-medium leading-tight text-center">{p.name}</span>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       {/* Format indicator */}
