@@ -1,10 +1,11 @@
 import { useState, useCallback } from "react";
 import { useAppStore } from "@/store/appStore";
-import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload, MessageSquare, Wrench } from "lucide-react";
+import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload } from "lucide-react";
 import { generateId } from "@/lib/utils";
 import { db } from "@/store/database";
 import { useChatStore } from "@/store/chatStore";
-import { SCENARIOS, getScenario, DEFAULT_SCENARIO } from "@/scenarios/registry";
+import { getScenario, DEFAULT_SCENARIO } from "@/scenarios/registry";
+import { getCharacter } from "@/lib/characters";
 import type { Workspace, Chat, UUID } from "@/types";
 
 export function Sidebar() {
@@ -95,9 +96,6 @@ export function Sidebar() {
   );
 
   const currentScenarioId = useAppStore((s) => s.currentScenarioId);
-  const setCurrentScenario = useAppStore((s) => s.setCurrentScenario);
-  const openCharacterProfile = useAppStore((s) => s.openCharacterProfile);
-
   const activeScenario = getScenario(currentScenarioId) ?? DEFAULT_SCENARIO;
 
   // Group chats by workspace
@@ -113,56 +111,6 @@ export function Sidebar() {
         <h1 className="text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary">
           PM Workflow Harness
         </h1>
-      </div>
-
-      {/* Scene Selector */}
-      <div className="p-2 border-b border-border dark:border-dark-border">
-        <div className="flex gap-1">
-          {SCENARIOS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setCurrentScenario(s.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs rounded-md transition-colors ${
-                currentScenarioId === s.id
-                  ? "bg-primary/10 text-primary font-medium"
-                  : "text-foreground-secondary dark:text-dark-foreground-secondary hover:bg-background dark:hover:bg-dark-background"
-              }`}
-              title={s.description}
-            >
-              {s.id === "pm-discussion" ? <MessageSquare size={12} /> : <Wrench size={12} />}
-              {s.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Characters */}
-      <div className="px-3 py-2 border-b border-border dark:border-dark-border">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[11px] font-medium text-foreground-secondary dark:text-dark-foreground-secondary uppercase tracking-wider">
-            团队成员
-          </span>
-        </div>
-        <div className="flex gap-1.5">
-          {activeScenario.characters.map((char) => (
-            <button
-              key={char.id}
-              onClick={() => openCharacterProfile(char.id)}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md hover:bg-background dark:hover:bg-dark-background transition-colors group"
-              title={`${char.name} — 点击查看档案`}
-            >
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium text-white shrink-0"
-                style={{ backgroundColor: char.color }}
-              >
-                {char.avatar}
-              </div>
-              <span className="text-foreground dark:text-dark-foreground group-hover:text-primary transition-colors">
-                {char.name}
-              </span>
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Workspace & Chat List */}
@@ -354,6 +302,10 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
     );
   }
 
+  const chatCharacters = (chat.characterIds ?? [])
+    .map((id) => getCharacter(id))
+    .filter(Boolean);
+
   return (
     <button
       onClick={onClick}
@@ -366,25 +318,23 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
       title="双击改名"
     >
       <div className="truncate font-medium">{chat.title}</div>
-      <div className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary mt-0.5">
-        {formatRelativeTime(chat.updatedAt)}
+      <div className="flex items-center gap-1 mt-1">
+        {chatCharacters.slice(0, 4).map((char) => (
+          <div
+            key={char!.id}
+            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-medium text-white shrink-0"
+            style={{ backgroundColor: char!.color }}
+            title={char!.name}
+          >
+            {char!.avatar}
+          </div>
+        ))}
+        {chatCharacters.length > 4 && (
+          <span className="text-[10px] text-foreground-secondary dark:text-dark-foreground-secondary">
+            +{chatCharacters.length - 4}
+          </span>
+        )}
       </div>
     </button>
   );
-}
-
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "刚刚";
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  if (diffDays === 1) return "昨天";
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString("zh-CN");
 }
