@@ -94,12 +94,15 @@ export class DiscussionManager {
       }
     }
 
+    // Filter out "跳" responses (NPC decided topic is irrelevant)
+    const filteredMessages = newMessages.filter((m) => m.content.trim() !== "跳");
+
     // 3. 检测分歧并决定是否生成选择点
-    const allMessages = [...recentMessages, ...newMessages];
+    const allMessages = [...recentMessages, ...filteredMessages];
     const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
-      messages: newMessages,
+      messages: filteredMessages,
       choice,
       converged: false,
     };
@@ -168,7 +171,7 @@ export class DiscussionManager {
           messages: chatMessages,
           model: this.settings.model,
           temperature: 0.7,
-          maxTokens: 512,
+          maxTokens: 1024,
         };
 
         const startTime = Date.now();
@@ -193,12 +196,15 @@ export class DiscussionManager {
       }
     }
 
+    // Filter out "跳" responses (NPC decided topic is irrelevant)
+    const filteredMessages = newMessages.filter((m) => m.content.trim() !== "跳");
+
     // 3. 检测分歧并决定是否生成选择点（非流式）
-    const allMessages = [...recentMessages, ...newMessages];
+    const allMessages = [...recentMessages, ...filteredMessages];
     const choice = await this.checkAndGenerateChoice(chatId, allMessages);
 
     return {
-      messages: newMessages,
+      messages: filteredMessages,
       choice,
       converged: false,
     };
@@ -223,7 +229,7 @@ export class DiscussionManager {
       messages: chatMessages,
       model: this.settings.model,
       temperature: 0.7,
-      maxTokens: 512,
+      maxTokens: 1024,
     };
 
     const startTime = Date.now();
@@ -265,7 +271,7 @@ export class DiscussionManager {
         ],
         model: this.settings.model,
         temperature: 0.3,
-        maxTokens: 512,
+        maxTokens: 1024,
       });
 
       const result = this.parseJSON(response.content);
