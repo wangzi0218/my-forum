@@ -170,19 +170,8 @@ export function ChatView() {
       };
       await addMessage(userMessage);
 
-      // 2. 加载同工作区其他讨论的上下文 + 技能
-      let previousContext: string | undefined;
-      const [prevMessages, characterSkills] = await Promise.all([
-        currentWorkspaceId
-          ? db.getOtherChatMessages(currentWorkspaceId, activeChatId, 10).catch(() => [])
-          : Promise.resolve([]),
-        loadCharacterSkills(chatCharacters),
-      ]);
-      if (prevMessages.length > 0) {
-        previousContext = prevMessages
-          .map((m) => m.role === "user" ? `用户：${m.content}` : `[${m.characterId ?? "NPC"}]：${m.content}`)
-          .join("\n");
-      }
+      // 2. 加载技能
+      const characterSkills = await loadCharacterSkills(chatCharacters);
 
       // 3. 启动 NPC 讨论（流式）
       const engine = new DiscussionManager(llmSettings, scenario);
@@ -211,7 +200,7 @@ export function ChatView() {
           },
           // 项目背景
           workspaces.find((w) => w.id === currentWorkspaceId)?.background,
-          previousContext,
+          undefined,
           characterSkills,
           chatCharacters,
         );
