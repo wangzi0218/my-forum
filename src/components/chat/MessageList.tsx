@@ -103,7 +103,7 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
           ) : null
         )}
 
-        {isTyping && typingCharacterId && (
+        {isTyping && typingCharacterId && !currentStreaming.some((m) => m.characterId === typingCharacterId) && (
           <TypingIndicator characterId={typingCharacterId} />
         )}
 
