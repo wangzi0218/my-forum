@@ -1,10 +1,10 @@
 [package]
-name = "pm-workflow-harness"
+name = "my-forum"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "pm_workflow_harness_lib"
+name = "my_forum_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]

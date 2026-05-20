@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicholasq/tauri-v2-schema/main/tauri-conf.schema.json",
-  "productName": "PM Workflow Harness",
+  "productName": "My Forum",
   "version": "0.1.0",
-  "identifier": "com.pm-workflow-harness.app",
+  "identifier": "com.my-forum.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "PM Workflow Harness",
+        "label": "main",
+        "title": "My Forum",
         "width": 1200,
         "height": 800,
         "minWidth": 900,

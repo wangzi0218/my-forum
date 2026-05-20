@@ -33,7 +33,7 @@ export function Sidebar() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `pm-council-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `my-forum-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
