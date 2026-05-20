@@ -3,21 +3,16 @@ import type { Message, Choice, UUID } from "@/types";
 import { db } from "./database";
 
 interface ChatState {
-  /** Current chat's messages from DB (never contains streaming message from another chat) */
+  /** Current chat's messages from DB (never contains streaming messages) */
   messages: Message[];
-  /** In-progress streaming message (separate from messages to avoid cross-chat contamination) */
-  streamingMessage: Message | null;
+  /** All in-progress streaming messages, keyed by message ID */
+  streamingMessages: Map<UUID, Message>;
   isTyping: boolean;
   typingCharacterId: UUID | null;
   currentChoice: Choice | null;
   resolvedChoices: Choice[];
   isLoading: boolean;
   errorMessage: { text: string; showSettingsLink: boolean } | null;
-
-  /** Messages to render: DB messages + streaming message if it belongs to current chat */
-  getDisplayMessages: () => Message[];
-  /** Whether the streaming message belongs to the given chat */
-  isStreamingInChat: (chatId: UUID) => boolean;
 
   loadMessages: (chatId: UUID) => Promise<void>;
   addMessage: (message: Message) => Promise<void>;
@@ -39,26 +34,13 @@ interface ChatState {
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
-  streamingMessage: null,
+  streamingMessages: new Map(),
   isTyping: false,
   typingCharacterId: null,
   currentChoice: null,
   resolvedChoices: [],
   isLoading: false,
   errorMessage: null,
-
-  getDisplayMessages: () => {
-    const { messages, streamingMessage } = get();
-    if (!streamingMessage) return messages;
-    // Only include streaming message if it's already in messages (same chat)
-    const hasStreaming = messages.some((m) => m.id === streamingMessage.id);
-    return hasStreaming ? messages : messages;
-  },
-
-  isStreamingInChat: (chatId) => {
-    const { streamingMessage } = get();
-    return streamingMessage?.chatId === chatId;
-  },
 
   loadMessages: async (chatId) => {
     set({ isLoading: true });
@@ -173,51 +155,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
       isTyping: false,
       typingCharacterId: null,
       errorMessage: null,
-      // streamingMessage is NOT cleared — it belongs to the other chat
+      // streamingMessages NOT cleared — they belong to their own chats
     }),
 
   startStreamingMessage: (message) =>
     set((state) => {
       const emptyMsg = { ...message, content: "" };
-      return {
-        // Only add to messages if streaming in the current chat
-        messages: state.messages[0]?.chatId === message.chatId || state.messages.length === 0
-          ? [...state.messages, emptyMsg]
-          : state.messages,
-        streamingMessage: emptyMsg,
-      };
+      const newMap = new Map(state.streamingMessages);
+      newMap.set(message.id, emptyMsg);
+      return { streamingMessages: newMap };
     }),
 
   appendStreamChunk: (messageId, chunk) =>
     set((state) => {
-      const newStreaming = state.streamingMessage?.id === messageId
-        ? { ...state.streamingMessage, content: state.streamingMessage.content + chunk }
-        : state.streamingMessage;
-      return {
-        streamingMessage: newStreaming,
-        messages: state.messages.map((m) =>
-          m.id === messageId ? { ...m, content: m.content + chunk } : m,
-        ),
-      };
+      const msg = state.streamingMessages.get(messageId);
+      if (!msg) return state;
+      const newMap = new Map(state.streamingMessages);
+      newMap.set(messageId, { ...msg, content: msg.content + chunk });
+      return { streamingMessages: newMap };
     }),
 
   finishStreaming: async (messageId) => {
-    const state = useChatStore.getState();
-    const msg = state.streamingMessage?.id === messageId
-      ? state.streamingMessage
-      : state.messages.find((m) => m.id === messageId);
-    set({ streamingMessage: null });
-    if (msg) {
-      try {
-        await db.createMessage(msg);
-        // If the message wasn't in messages (different chat), add it now
-        const currentMessages = useChatStore.getState().messages;
-        if (!currentMessages.some((m) => m.id === msg.id)) {
-          set({ messages: [...currentMessages, msg] });
-        }
-      } catch (e) {
-        console.error("Failed to persist streamed message:", e);
-      }
+    const state = get();
+    const msg = state.streamingMessages.get(messageId);
+    if (!msg) return;
+
+    // Remove from streaming map
+    const newMap = new Map(state.streamingMessages);
+    newMap.delete(messageId);
+    set({ streamingMessages: newMap });
+
+    // Persist to DB
+    try {
+      await db.createMessage(msg);
+    } catch (e) {
+      console.error("Failed to persist streamed message:", e);
     }
   },
 

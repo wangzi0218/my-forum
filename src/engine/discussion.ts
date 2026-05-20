@@ -116,7 +116,7 @@ export class DiscussionManager {
     userContent: string,
     images: ImageAttachment[],
     recentMessages: Message[],
-    onChunk: (characterId: string, chunk: string) => void,
+    onChunk: (characterId: string, chunk: string, messageId: UUID) => void,
     onMessageStart: (message: Message) => void,
     onTypingStart?: (characterId: string) => void,
     background?: string,
@@ -173,7 +173,7 @@ export class DiscussionManager {
 
         const startTime = Date.now();
         const response = await this.provider.chatStream(request, (chunk) =>
-          onChunk(characterId, chunk),
+          onChunk(characterId, chunk, messageId),
         );
         const latencyMs = Date.now() - startTime;
 
@@ -188,7 +188,7 @@ export class DiscussionManager {
         newMessages.push(completedMessage);
       } catch {
         const fallback = this.generateFallbackResponse(chatId, characterId);
-        onChunk(characterId, fallback.content);
+        onChunk(characterId, fallback.content, messageId);
         newMessages.push({ ...emptyMessage, content: fallback.content });
       }
     }

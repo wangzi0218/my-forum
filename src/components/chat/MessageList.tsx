@@ -14,7 +14,7 @@ interface MessageListProps {
 
 export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) {
   const messages = useChatStore((s) => s.messages);
-  const streamingMessage = useChatStore((s) => s.streamingMessage);
+  const streamingMessages = useChatStore((s) => s.streamingMessages);
   const isTyping = useChatStore((s) => s.isTyping);
   const typingCharacterId = useChatStore((s) => s.typingCharacterId);
   const isLoading = useChatStore((s) => s.isLoading);
@@ -22,10 +22,11 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
   const currentChoice = useChatStore((s) => s.currentChoice);
   const resolvedChoices = useChatStore((s) => s.resolvedChoices);
 
-  // Compute display messages: DB messages + streaming message if it belongs to current chat
-  const displayMessages = streamingMessage && streamingMessage.chatId === currentChatId
-    ? [...messages, streamingMessage]
-    : messages;
+  // Compute display messages: DB messages + streaming messages belonging to current chat
+  const currentStreaming = Array.from(streamingMessages.values()).filter(
+    (m) => m.chatId === currentChatId,
+  );
+  const displayMessages = [...messages, ...currentStreaming];
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -97,12 +98,12 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
             </div>
           ) : msg.role === "character" ? (
             <div key={msg.id} className="animate-message-in">
-              <NPCMessage message={msg} isStreaming={msg.id === streamingMessage?.id} />
+              <NPCMessage message={msg} isStreaming={streamingMessages.has(msg.id)} />
             </div>
           ) : null
         )}
 
-        {isTyping && typingCharacterId && !streamingMessage && (
+        {isTyping && typingCharacterId && streamingMessages.size === 0 && (
           <TypingIndicator characterId={typingCharacterId} />
         )}
 

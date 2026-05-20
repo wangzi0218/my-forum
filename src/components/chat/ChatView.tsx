@@ -102,11 +102,8 @@ export function ChatView() {
           choiceContext,
           [],
           currentMessages,
-          (_characterId, chunk) => {
-            const streamingId = useChatStore.getState().streamingMessage?.id;
-            if (streamingId) {
-              appendStreamChunk(streamingId, chunk);
-            }
+          (_characterId, chunk, msgId) => {
+            appendStreamChunk(msgId, chunk);
           },
           (msg) => {
             if (msg.characterId) setTyping(msg.characterId);
@@ -208,11 +205,8 @@ export function ChatView() {
           images,
           currentMessages,
           // onChunk: 实时更新消息内容
-          (_characterId, chunk) => {
-            const streamingId = useChatStore.getState().streamingMessage?.id;
-            if (streamingId) {
-              appendStreamChunk(streamingId, chunk);
-            }
+          (_characterId, chunk, msgId) => {
+            appendStreamChunk(msgId, chunk);
           },
           // onMessageStart: 创建空消息，设置 typing 状态
           (msg) => {
