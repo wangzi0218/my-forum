@@ -86,6 +86,8 @@ export interface Choice {
   id: UUID;
   chatId: UUID;
   triggerMessageId?: UUID;
+  /** The last message ID after which this choice should appear in the flow */
+  archivedAfterMessageId?: UUID;
   question: string;
   options: ChoiceOption[];
   selectedOptionId?: UUID;

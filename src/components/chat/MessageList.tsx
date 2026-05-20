@@ -91,30 +91,39 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
         role="log"
         aria-live="polite"
       >
-        {displayMessages.map((msg) =>
-          msg.role === "user" ? (
-            <div key={msg.id} className="animate-message-in">
-              <UserMessage message={msg} />
-            </div>
-          ) : msg.role === "character" ? (
-            <div key={msg.id} className="animate-message-in">
-              <NPCMessage message={msg} isStreaming={streamingMessages.has(msg.id)} />
-            </div>
-          ) : null
-        )}
+        {/* Render messages with resolved choices inline */}
+        {displayMessages.map((msg) => {
+          // Find any resolved choice that should appear after this message
+          const choiceAfter = resolvedChoices.find(
+            (c) => c.archivedAfterMessageId === msg.id,
+          );
 
-        {resolvedChoices.map((choice) => {
-          const selectedOpt = choice.options.find((o) => o.id === choice.selectedOptionId);
           return (
-            <div key={choice.id} className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary bg-background-chat dark:bg-dark-background-chat rounded-lg px-3 py-2 border border-border dark:border-dark-border">
-              <span className="font-medium">决策：</span>{choice.question}
-              {selectedOpt && (
-                <span className="ml-1">→ {selectedOpt.label}. {selectedOpt.description}</span>
+            <div key={msg.id}>
+              {msg.role === "user" ? (
+                <div className="animate-message-in">
+                  <UserMessage message={msg} />
+                </div>
+              ) : msg.role === "character" ? (
+                <div className="animate-message-in">
+                  <NPCMessage message={msg} isStreaming={streamingMessages.has(msg.id)} />
+                </div>
+              ) : null}
+
+              {/* Inline resolved choice */}
+              {choiceAfter && (
+                <ResolvedChoiceInline choice={choiceAfter} />
               )}
-              {choice.status === "skipped" && <span className="ml-1 text-foreground-secondary">（跳过）</span>}
             </div>
           );
         })}
+
+        {/* Fallback: render choices without archivedAfterMessageId at the end */}
+        {resolvedChoices
+          .filter((c) => !c.archivedAfterMessageId)
+          .map((choice) => (
+            <ResolvedChoiceInline key={choice.id} choice={choice} />
+          ))}
 
         {isTyping && typingCharacterId && !currentStreaming.some((m) => m.characterId === typingCharacterId) && (
           <TypingIndicator characterId={typingCharacterId} />
@@ -144,6 +153,19 @@ export function MessageList({ onSelectChoice, onSkipChoice }: MessageListProps) 
           <ChevronDown size={16} />
         </button>
       )}
+    </div>
+  );
+}
+
+function ResolvedChoiceInline({ choice }: { choice: import("@/types").Choice }) {
+  const selectedOpt = choice.options.find((o) => o.id === choice.selectedOptionId);
+  return (
+    <div className="my-1 text-xs text-foreground-secondary dark:text-dark-foreground-secondary bg-background-chat dark:bg-dark-background-chat rounded-lg px-3 py-2 border border-border dark:border-dark-border animate-message-in">
+      <span className="font-medium">决策：</span>{choice.question}
+      {selectedOpt && (
+        <span className="ml-1">→ {selectedOpt.label}. {selectedOpt.description}</span>
+      )}
+      {choice.status === "skipped" && <span className="ml-1">（跳过）</span>}
     </div>
   );
 }

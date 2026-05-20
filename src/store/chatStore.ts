@@ -117,9 +117,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   archiveCurrentChoice: () => {
     set((state) => {
       if (!state.currentChoice) return state;
+      // Record the last message ID so the choice renders inline
+      const lastMsgId = state.messages[state.messages.length - 1]?.id;
+      const archivedChoice = {
+        ...state.currentChoice,
+        archivedAfterMessageId: lastMsgId,
+      };
       return {
         currentChoice: null,
-        resolvedChoices: [...state.resolvedChoices, state.currentChoice],
+        resolvedChoices: [...state.resolvedChoices, archivedChoice],
       };
     });
   },
