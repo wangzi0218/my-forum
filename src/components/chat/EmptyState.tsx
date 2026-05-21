@@ -2,10 +2,9 @@ import { MessageSquare } from "lucide-react";
 
 interface EmptyStateProps {
   characterCount?: number;
-  onStartChat?: () => void;
 }
 
-export function EmptyState({ characterCount, onStartChat }: EmptyStateProps) {
+export function EmptyState({ characterCount }: EmptyStateProps) {
   const count = characterCount ?? 3;
   return (
     <div className="flex-1 flex items-center justify-center">
@@ -24,14 +23,6 @@ export function EmptyState({ characterCount, onStartChat }: EmptyStateProps) {
             输入你的想法、反馈或问题，{count} 位同事会和你一起讨论
           </p>
         </div>
-        {onStartChat && (
-          <button
-            onClick={onStartChat}
-            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
-          >
-            开始讨论
-          </button>
-        )}
       </div>
     </div>
   );

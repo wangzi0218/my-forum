@@ -55,7 +55,7 @@ function ImageThumb({ image }: { image: ImageAttachment }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
           onClick={() => setIsOpen(false)}
         >
-          <div className="relative max-w-[90vw] max-h-[90vh]">
+          <div className="relative max-w-[90vw] max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setIsOpen(false)}
               className="absolute -top-2 -right-2 w-8 h-8 bg-background dark:bg-dark-background rounded-full flex items-center justify-center shadow-lg"
