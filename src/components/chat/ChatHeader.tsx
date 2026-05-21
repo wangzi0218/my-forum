@@ -13,7 +13,7 @@ export function ChatHeader({ onOpenSettings }: ChatHeaderProps) {
   if (!currentChat) return null;
 
   return (
-    <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-border dark:border-dark-border">
+    <div className="h-[53px] flex items-center justify-between px-4 border-b border-border dark:border-dark-border shrink-0">
       <div className="text-sm font-semibold truncate">{currentChat.title}</div>
       {onOpenSettings && (
         <button
