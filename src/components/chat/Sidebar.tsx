@@ -1,34 +1,119 @@
 import { useState, useCallback } from "react";
 import { useAppStore } from "@/store/appStore";
-import { Plus, Settings, ChevronRight, FolderOpen, Download, Upload } from "lucide-react";
+import { Plus, Settings, Download, Upload, Search } from "lucide-react";
 import { generateId } from "@/lib/utils";
 import { db } from "@/store/database";
 import { useChatStore } from "@/store/chatStore";
 import { getScenario, DEFAULT_SCENARIO, SCENARIOS } from "@/scenarios/registry";
 import { getCharacter } from "@/lib/characters";
 import { NpcPicker } from "./NpcPicker";
-import type { Workspace, Chat, UUID } from "@/types";
+import type { Chat, UUID } from "@/types";
 
 /** Merge all characters from all scenarios (deduplicated) */
 const ALL_CHARACTERS = [...new Map(
   SCENARIOS.flatMap((s) => s.characters).map((c) => [c.id, c])
 ).values()];
 
+/** All character IDs for the "全员大群" */
+const ALL_CHARACTER_IDS = ALL_CHARACTERS.map((c) => c.id);
+
 export function Sidebar() {
   const openSettings = useAppStore((s) => s.openSettings);
-  const workspaces = useAppStore((s) => s.workspaces);
   const chats = useAppStore((s) => s.chats);
   const currentChatId = useAppStore((s) => s.currentChatId);
   const setCurrentChat = useAppStore((s) => s.setCurrentChat);
-  const setCurrentWorkspace = useAppStore((s) => s.setCurrentWorkspace);
-  const addWorkspace = useAppStore((s) => s.addWorkspace);
   const addChat = useAppStore((s) => s.addChat);
-  const currentWorkspaceId = useAppStore((s) => s.currentWorkspaceId);
+  const workspaces = useAppStore((s) => s.workspaces);
+
+  const [showNpcPicker, setShowNpcPicker] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const currentScenarioId = useAppStore((s) => s.currentScenarioId);
+  const activeScenario = getScenario(currentScenarioId) ?? DEFAULT_SCENARIO;
+
+  // Sort chats by most recent
+  const sortedChats = [...chats].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+
+  // Filter by search
+  const filteredChats = searchQuery
+    ? sortedChats.filter((c) =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : sortedChats;
+
+  // Find or create "全员大群"
+  const allGroupChat = chats.find(
+    (c) =>
+      c.characterIds.length >= ALL_CHARACTER_IDS.length &&
+      ALL_CHARACTER_IDS.every((id) => c.characterIds.includes(id)),
+  );
+
+  const handleNewChat = useCallback(() => {
+    setShowNpcPicker(true);
+  }, []);
+
+  const handleNpcPickerConfirm = useCallback(
+    async (selectedIds: string[]) => {
+      setShowNpcPicker(false);
+      if (selectedIds.length === 0) return;
+
+      const workspaceId = workspaces[0]!.id;
+      const names = selectedIds.map((id) => getCharacter(id)?.name ?? "NPC");
+      const title =
+        selectedIds.length === ALL_CHARACTER_IDS.length
+          ? "全员大群"
+          : names.length <= 2
+            ? names.join("、")
+            : `${names[0]}等${names.length}人`;
+
+      const chat: Chat = {
+        id: generateId(),
+        workspaceId,
+        title,
+        status: "active",
+        characterIds: selectedIds,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await addChat(chat);
+      await setCurrentChat(chat.id);
+    },
+    [workspaces, addChat, setCurrentChat],
+  );
+
+  const handleOpenAllGroup = useCallback(async () => {
+    if (allGroupChat) {
+      await setCurrentChat(allGroupChat.id);
+      return;
+    }
+    // Create the all-group chat
+    const workspaceId = workspaces[0]!.id;
+    const chat: Chat = {
+      id: generateId(),
+      workspaceId,
+      title: "全员大群",
+      status: "active",
+      characterIds: ALL_CHARACTER_IDS,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await addChat(chat);
+    await setCurrentChat(chat.id);
+  }, [allGroupChat, workspaces, addChat, setCurrentChat]);
+
+  const handleSelectChat = useCallback(
+    async (chatId: UUID) => {
+      await setCurrentChat(chatId);
+    },
+    [setCurrentChat],
+  );
 
   const handleExport = useCallback(async () => {
-    if (!currentWorkspaceId) return;
+    if (workspaces.length === 0) return;
     try {
-      const json = await db.exportWorkspace(currentWorkspaceId);
+      const json = await db.exportWorkspace(workspaces[0]!.id);
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -39,10 +124,10 @@ export function Sidebar() {
     } catch (e) {
       alert(`导出失败：${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [currentWorkspaceId]);
+  }, [workspaces]);
 
   const handleImport = useCallback(async () => {
-    if (!window.confirm("导入将覆盖当前工作区数据，确定继续吗？")) return;
+    if (!window.confirm("导入将覆盖当前数据，确定继续吗？")) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".json";
@@ -54,7 +139,12 @@ export function Sidebar() {
         const wsId = await db.importWorkspace(text);
         const workspaces = await db.listWorkspaces();
         const chats = await db.listChats(wsId);
-        useAppStore.setState({ workspaces, chats, currentWorkspaceId: wsId, currentChatId: null });
+        useAppStore.setState({
+          workspaces,
+          chats,
+          currentWorkspaceId: wsId,
+          currentChatId: null,
+        });
         useChatStore.getState().clearMessages();
       } catch (e) {
         alert(`导入失败：${e instanceof Error ? e.message : String(e)}`);
@@ -62,82 +152,6 @@ export function Sidebar() {
     };
     input.click();
   }, []);
-
-  const [showNpcPicker, setShowNpcPicker] = useState(false);
-
-  const handleNewChat = useCallback(() => {
-    setShowNpcPicker(true);
-  }, []);
-
-  const handleNpcPickerConfirm = useCallback(async (selectedIds: string[]) => {
-    setShowNpcPicker(false);
-    if (selectedIds.length === 0) return;
-
-    // Use first workspace (initApp guarantees at least one exists)
-    const workspaceId = workspaces[0]!.id;
-
-    // Generate title from selected characters
-    const names = selectedIds.map((id) => getCharacter(id)?.name ?? "NPC");
-    const title = names.length <= 2 ? names.join("、") : `${names[0]}等${names.length}人`;
-
-    const chat: Chat = {
-      id: generateId(),
-      workspaceId,
-      title,
-      status: "active",
-      characterIds: selectedIds,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    await addChat(chat);
-    setCurrentWorkspace(workspaceId);
-    await setCurrentChat(chat.id);
-  }, [workspaces, addWorkspace, addChat, setCurrentWorkspace, setCurrentChat]);
-
-  const handleSelectChat = useCallback(
-    async (chatId: UUID) => {
-      await setCurrentChat(chatId);
-    },
-    [setCurrentChat],
-  );
-
-  const currentScenarioId = useAppStore((s) => s.currentScenarioId);
-  const activeScenario = getScenario(currentScenarioId) ?? DEFAULT_SCENARIO;
-
-  // Group chats by workspace
-  const workspaceGroups = workspaces.map((ws) => ({
-    workspace: ws,
-    chats: chats.filter((c) => c.workspaceId === ws.id),
-  }));
-
-  // Find or create a private chat with a specific NPC
-  const handleOpenPrivateChat = useCallback(async (characterId: string) => {
-    // Check if a private chat already exists with this NPC
-    const existing = chats.find((c) =>
-      c.characterIds.length === 1 && c.characterIds[0] === characterId,
-    );
-    if (existing) {
-      await setCurrentChat(existing.id);
-      return;
-    }
-
-    // Create new private chat
-    const workspaceId = workspaces[0]!.id;
-
-    const char = getCharacter(characterId);
-    const chat: Chat = {
-      id: generateId(),
-      workspaceId,
-      title: char?.name ?? "私聊",
-      status: "active",
-      characterIds: [characterId],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    await addChat(chat);
-    setCurrentWorkspace(workspaceId);
-    await setCurrentChat(chat.id);
-  }, [chats, workspaces, addWorkspace, addChat, setCurrentWorkspace, setCurrentChat]);
 
   return (
     <aside className="w-[280px] shrink-0 border-r border-border dark:border-dark-border flex flex-col bg-background-secondary dark:bg-dark-background-secondary">
@@ -148,47 +162,63 @@ export function Sidebar() {
         </h1>
       </div>
 
-      {/* Contacts — click to open private chat */}
-      <div className="px-3 py-2 border-b border-border dark:border-dark-border">
-        <div className="text-[11px] font-medium text-foreground-secondary dark:text-dark-foreground-secondary uppercase tracking-wider mb-1.5">
-          同事
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {ALL_CHARACTERS.map((char) => (
-            <button
-              key={char.id}
-              onClick={() => handleOpenPrivateChat(char.id)}
-              className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md hover:bg-background dark:hover:bg-dark-background transition-colors group"
-              title={`与 ${char.name} 私聊`}
-            >
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-medium text-white shrink-0"
-                style={{ backgroundColor: char.color }}
-              >
-                {char.avatar}
-              </div>
-              <span className="text-foreground dark:text-dark-foreground group-hover:text-primary transition-colors">
-                {char.name}
-              </span>
-            </button>
-          ))}
+      {/* Search */}
+      <div className="px-3 py-2">
+        <div className="relative">
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground-secondary dark:text-dark-foreground-secondary"
+          />
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索对话..."
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-background dark:bg-dark-background rounded-md border border-border dark:border-dark-border focus:outline-none focus:ring-1 focus:ring-primary/50"
+          />
         </div>
       </div>
 
-      {/* Workspace & Chat List */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {workspaceGroups.length === 0 ? (
-          <div className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary px-2 py-4 text-center">
-            暂无讨论
+      {/* All Group — pinned */}
+      <div className="px-2 pb-1">
+        <button
+          onClick={handleOpenAllGroup}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+            allGroupChat?.id === currentChatId
+              ? "bg-primary/10"
+              : "hover:bg-background dark:hover:bg-dark-background"
+          }`}
+        >
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center text-white text-sm font-bold shrink-0">
+            全
+          </div>
+          <div className="flex-1 min-w-0 text-left">
+            <div className="text-sm font-medium truncate">全员大群</div>
+            <div className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary truncate">
+              {ALL_CHARACTER_IDS.length} 位同事
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <div className="px-3 pb-1">
+        <div className="text-[11px] font-medium text-foreground-secondary dark:text-dark-foreground-secondary uppercase tracking-wider">
+          最近对话
+        </div>
+      </div>
+
+      {/* Chat List — flat, sorted by time */}
+      <div className="flex-1 overflow-y-auto px-2">
+        {filteredChats.length === 0 ? (
+          <div className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary px-2 py-8 text-center">
+            {searchQuery ? "没有匹配的对话" : "暂无对话，点击新建"}
           </div>
         ) : (
-          workspaceGroups.map(({ workspace, chats: wsChats }) => (
-            <WorkspaceItem
-              key={workspace.id}
-              workspace={workspace}
-              chats={wsChats}
-              currentChatId={currentChatId}
-              onSelectChat={handleSelectChat}
+          filteredChats.map((chat) => (
+            <ChatListItem
+              key={chat.id}
+              chat={chat}
+              isActive={chat.id === currentChatId}
+              onClick={() => handleSelectChat(chat.id)}
             />
           ))
         )}
@@ -207,7 +237,7 @@ export function Sidebar() {
           <button
             onClick={handleExport}
             className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
-            title="导出工作区"
+            title="导出"
           >
             <Download size={13} />
             导出
@@ -215,7 +245,7 @@ export function Sidebar() {
           <button
             onClick={handleImport}
             className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 text-xs text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
-            title="导入工作区"
+            title="导入"
           >
             <Upload size={13} />
             导入
@@ -243,110 +273,28 @@ export function Sidebar() {
   );
 }
 
-interface WorkspaceItemProps {
-  workspace: Workspace;
-  chats: Chat[];
-  currentChatId: UUID | null;
-  onSelectChat: (chatId: UUID) => void;
-}
+// ---------------------------------------------------------------------------
+// Chat List Item — IM style with avatar + title + preview + time
+// ---------------------------------------------------------------------------
 
-function WorkspaceItem({
-  workspace,
-  chats,
-  currentChatId,
-  onSelectChat,
-}: WorkspaceItemProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [showBackground, setShowBackground] = useState(false);
-  const [backgroundText, setBackgroundText] = useState(workspace.background);
-  const updateWorkspace = useAppStore((s) => s.updateWorkspace);
-
-  const handleBackgroundSave = useCallback(() => {
-    if (backgroundText !== workspace.background) {
-      updateWorkspace(workspace.id, { background: backgroundText });
-    }
-    setShowBackground(false);
-  }, [backgroundText, workspace.background, workspace.id, updateWorkspace]);
-
-  return (
-    <div className="mb-1">
-      {/* Workspace header */}
-      <div className="flex items-center">
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="flex-1 flex items-center gap-2 px-2 py-2 text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background"
-        >
-          <ChevronRight
-            size={14}
-            className={`shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
-          />
-          <FolderOpen size={14} className="shrink-0" />
-          <span className="truncate">{workspace.name}</span>
-        </button>
-        <button
-          onClick={() => setShowBackground(!showBackground)}
-          className={`p-1 text-xs rounded transition-colors ${
-            showBackground || workspace.background
-              ? "text-primary"
-              : "text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground"
-          }`}
-          title="项目背景"
-        >
-          背景
-        </button>
-      </div>
-
-      {/* Background editor */}
-      {showBackground && (
-        <div className="mx-2 mb-1 px-2 py-1.5">
-          <textarea
-            value={backgroundText}
-            onChange={(e) => setBackgroundText(e.target.value)}
-            onBlur={handleBackgroundSave}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleBackgroundSave(); } }}
-            placeholder="描述项目背景，NPC 会在讨论时参考..."
-            rows={3}
-            className="w-full px-2 py-1.5 text-xs bg-background dark:bg-dark-background border border-border dark:border-dark-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
-          />
-          <p className="text-[10px] text-foreground-secondary dark:text-dark-foreground-secondary mt-1">
-            Shift+Enter 换行，Enter 保存
-          </p>
-        </div>
-      )}
-
-      {/* Chat list */}
-      {isExpanded && (
-        <div className="ml-2 space-y-0.5">
-          {chats.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-foreground-secondary dark:text-dark-foreground-secondary">
-              暂无讨论
-            </div>
-          ) : (
-            chats.map((chat) => (
-              <ChatItem
-                key={chat.id}
-                chat={chat}
-                isActive={chat.id === currentChatId}
-                onClick={() => onSelectChat(chat.id)}
-              />
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface ChatItemProps {
+interface ChatListItemProps {
   chat: Chat;
   isActive: boolean;
   onClick: () => void;
 }
 
-function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
+function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(chat.title);
   const updateChat = useAppStore((s) => s.updateChat);
+
+  // Get last message for preview (from current store messages if this chat is active)
+  const lastMessage = useChatStore((s) => {
+    // Only show preview for the active chat
+    if (chat.id !== useAppStore.getState().currentChatId) return null;
+    const msgs = s.messages;
+    return msgs.length > 0 ? msgs[msgs.length - 1] : null;
+  });
 
   const handleRename = async () => {
     const trimmed = editTitle.trim();
@@ -366,7 +314,10 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
           onBlur={handleRename}
           onKeyDown={(e) => {
             if (e.key === "Enter") handleRename();
-            if (e.key === "Escape") { setEditing(false); setEditTitle(chat.title); }
+            if (e.key === "Escape") {
+              setEditing(false);
+              setEditTitle(chat.title);
+            }
           }}
           className="w-full px-2 py-1 text-sm bg-background dark:bg-dark-background border border-primary rounded-md focus:outline-none"
         />
@@ -378,34 +329,81 @@ function ChatItem({ chat, isActive, onClick }: ChatItemProps) {
     .map((id) => getCharacter(id))
     .filter(Boolean);
 
+  const isGroup = chatCharacters.length > 1;
+
+  // Format time
+  const formatTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return "刚刚";
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    const diffHours = Math.floor(diffMs / 3600000);
+    if (diffHours < 24) return `${diffHours}小时前`;
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  };
+
   return (
     <div
       onClick={onClick}
-      onDoubleClick={() => { setEditing(true); setEditTitle(chat.title); }}
-      className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors cursor-pointer group relative ${
+      onDoubleClick={() => {
+        setEditing(true);
+        setEditTitle(chat.title);
+      }}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
         isActive
-          ? "bg-primary/10 text-primary border-l-[3px] border-l-primary"
-          : "text-foreground dark:text-dark-foreground hover:bg-background dark:hover:bg-dark-background"
+          ? "bg-primary/10"
+          : "hover:bg-background dark:hover:bg-dark-background"
       }`}
       title="双击改名"
     >
-      <div className="truncate font-medium pr-6">{chat.title}</div>
-      <div className="flex items-center gap-1 mt-1">
-        {chatCharacters.slice(0, 4).map((char) => (
-          <div
-            key={char!.id}
-            className="w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-medium text-white shrink-0"
-            style={{ backgroundColor: char!.color }}
-            title={char!.name}
-          >
-            {char!.avatar}
+      {/* Avatar — single character or group composite */}
+      {isGroup ? (
+        <div className="relative w-10 h-10 shrink-0">
+          {/* Show up to 4 small avatars in a 2x2 grid */}
+          <div className="grid grid-cols-2 gap-0.5 w-10 h-10">
+            {chatCharacters.slice(0, 4).map((char) => (
+              <div
+                key={char!.id}
+                className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-medium text-white"
+                style={{ backgroundColor: char!.color }}
+              >
+                {char!.avatar}
+              </div>
+            ))}
           </div>
-        ))}
-        {chatCharacters.length > 4 && (
-          <span className="text-[10px] text-foreground-secondary dark:text-dark-foreground-secondary">
-            +{chatCharacters.length - 4}
+        </div>
+      ) : (
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium text-white shrink-0"
+          style={{ backgroundColor: chatCharacters[0]?.color ?? "#6b7280" }}
+        >
+          {chatCharacters[0]?.avatar ?? "?"}
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <span
+            className={`text-sm truncate ${isActive ? "font-medium text-primary" : "font-medium"}`}
+          >
+            {chat.title}
           </span>
-        )}
+          <span className="text-[10px] text-foreground-secondary dark:text-dark-foreground-secondary shrink-0 ml-2">
+            {formatTime(chat.updatedAt)}
+          </span>
+        </div>
+        <div className="text-xs text-foreground-secondary dark:text-dark-foreground-secondary truncate mt-0.5">
+          {lastMessage
+            ? lastMessage.role === "user"
+              ? lastMessage.content
+              : `[${getCharacter(lastMessage.characterId ?? "")?.name ?? "NPC"}] ${lastMessage.content}`
+            : isGroup
+              ? `${chatCharacters.length} 位成员`
+              : chatCharacters[0]?.name ?? ""}
+        </div>
       </div>
     </div>
   );
