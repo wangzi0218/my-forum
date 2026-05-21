@@ -48,10 +48,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loadMessages: async (chatId) => {
     set({ isLoading: true });
     try {
-      const [messages, resolvedChoices] = await Promise.all([
+      const [messages, rawChoices] = await Promise.all([
         db.listMessages(chatId),
         db.getResolvedChoices(chatId),
       ]);
+
+      // Infer archivedAfterMessageId for choices loaded from DB
+      const resolvedChoices = rawChoices.map((choice) => {
+        if (choice.archivedAfterMessageId) return choice;
+        if (!choice.resolvedAt) return choice;
+        // Find the last message created before the choice was resolved
+        const resolvedTime = new Date(choice.resolvedAt).getTime();
+        let lastMsgId: string | undefined;
+        for (const msg of messages) {
+          if (new Date(msg.createdAt).getTime() <= resolvedTime) {
+            lastMsgId = msg.id;
+          }
+        }
+        return { ...choice, archivedAfterMessageId: lastMsgId };
+      });
+
       set({ messages, resolvedChoices });
     } finally {
       set({ isLoading: false });

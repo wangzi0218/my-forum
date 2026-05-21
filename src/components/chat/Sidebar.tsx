@@ -44,11 +44,7 @@ export function Sidebar() {
     : sortedChats;
 
   // Find or create "全员大群"
-  const allGroupChat = chats.find(
-    (c) =>
-      c.characterIds.length >= ALL_CHARACTER_IDS.length &&
-      ALL_CHARACTER_IDS.every((id) => c.characterIds.includes(id)),
-  );
+  const allGroupChat = chats.find((c) => c.title === "全员大群");
 
   const handleNewChat = useCallback(() => {
     setShowNpcPicker(true);
