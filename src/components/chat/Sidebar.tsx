@@ -107,15 +107,11 @@ export function Sidebar() {
 
   return (
     <aside className="w-[280px] shrink-0 border-r border-border dark:border-dark-border flex flex-col bg-background-secondary dark:bg-dark-background-secondary">
-      {/* Header */}
+      {/* Header + Search */}
       <div className="px-4 py-3 border-b border-border dark:border-dark-border">
-        <h1 className="text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary">
+        <h1 className="text-sm font-semibold text-foreground-secondary dark:text-dark-foreground-secondary mb-2">
           我的团队
         </h1>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 py-2">
         <div className="relative">
           <Search
             size={14}
@@ -177,23 +173,21 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Actions */}
-      <div className="px-4 py-3 border-t border-border dark:border-dark-border">
-        <div className="flex gap-2">
-          <button
-            onClick={handleNewChat}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
-          >
-            <Plus size={16} />
-            新建讨论
-          </button>
-          <button
-            onClick={openSettings}
-            className="flex items-center justify-center p-2 text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background border border-border dark:border-dark-border"
-            aria-label="设置"
-          >
-            <Settings size={16} />
-          </button>
-        </div>
+      <div className="px-4 py-3 border-t border-border dark:border-dark-border flex gap-2 items-center">
+        <button
+          onClick={handleNewChat}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary-foreground bg-primary rounded-md hover:opacity-90 transition-opacity"
+        >
+          <Plus size={16} />
+          新建讨论
+        </button>
+        <button
+          onClick={openSettings}
+          className="flex items-center justify-center p-2 text-foreground-secondary dark:text-dark-foreground-secondary hover:text-foreground dark:hover:text-dark-foreground transition-colors rounded-md hover:bg-background dark:hover:bg-dark-background border border-border dark:border-dark-border"
+          aria-label="设置"
+        >
+          <Settings size={16} />
+        </button>
       </div>
 
       {/* NPC Picker */}
