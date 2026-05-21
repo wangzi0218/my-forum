@@ -108,7 +108,7 @@ export function InputArea({
   const canSend = !isTypingInThisChat && (input.trim() || pendingImages.length > 0);
 
   return (
-    <div className="border-t border-border dark:border-dark-border px-4 py-3">
+    <div className="border-t border-border dark:border-dark-border px-4 py-2">
       {/* Image previews */}
       {pendingImages.length > 0 && (
         <div className="flex gap-2 mb-2 flex-wrap">
