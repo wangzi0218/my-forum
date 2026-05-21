@@ -107,7 +107,7 @@ export function Sidebar() {
       </div>
 
       {/* All Group — pinned */}
-      <div className="px-2 pb-1">
+      <div className="px-2 pt-2 pb-1">
         <button
           onClick={handleOpenAllGroup}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
